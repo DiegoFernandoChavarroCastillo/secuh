@@ -113,17 +113,20 @@ secuh/
 ### Fase 1 — MVP: una cámara → ntfy (sin panel)
 **Objetivo:** el flujo completo de valor funcionando de punta a punta, configurado por archivo.
 
-- [ ] `core/`: entidades, interfaces y `pipeline.py` con la orquestación movimiento → YOLO (solo clase `person`, umbral de confianza configurable) → cooldown → evento. **Testeado con fakes, sin hardware.**
-- [ ] `video/`: worker de captura en hilo propio con reconexión automática con backoff y log de cámara caída.
-- [ ] `detection/`: `MotionDetector` y `YoloPersonDetector` implementando las interfaces.
-- [ ] `notifications/ntfy.py`: envío de texto + captura adjunta, con reintentos y timeout; fallo de notificación no tumba el pipeline.
-- [ ] Grabación de clip de evento: buffer circular en memoria (~10s) + 10s posteriores, escrito a disco con nombre `{camara}/{timestamp}.mp4`; captura JPEG del frame de detección.
-- [ ] Configuración por `config.yaml` validada con Pydantic (cámara, sensibilidad, cooldown, topic de ntfy) + secretos por entorno.
-- [ ] Retención: job simple que borra clips más viejos que N días.
-- [ ] Logging estructurado de todo el flujo.
-- [ ] Entry point único: `python -m secuh` (o `secuh run`).
+- [x] `core/`: entidades, interfaces, `pipeline.py` (movimiento → YOLO clase `person` → umbral → cooldown → evento) y `handler.py` (evidencia → notificación → persistencia, tolerante a fallos parciales). **Testeado con fakes, sin hardware.**
+- [x] `video/`: `OpenCvVideoSource` con reconexión automática con backoff y redacción de credenciales en logs; `CameraWorker` con throttle de análisis.
+- [x] `detection/`: `Mog2MotionDetector` y `YoloPersonDetector` (con calentamiento del modelo al arrancar).
+- [x] `notifications/`: `NtfyNotifier` (texto + captura adjunta, reintentos, timeout; fallo no tumba el pipeline) y `ConsoleNotifier` para desarrollo.
+- [x] Grabación de clip: buffer circular pre + post, `data/clips/{camara}/{timestamp}.mp4`; captura JPEG en `data/snapshots/`.
+- [x] Configuración por `config.yaml` validada con Pydantic; topic de ntfy por variable de entorno `SECUH_NTFY_TOPIC`.
+- [x] Retención: job en hilo de fondo que borra evidencia más vieja que N días (pasada al arrancar + cada hora).
+- [x] Logging estructurado JSON de todo el flujo.
+- [x] Entry point único: `python -m secuh --config config.yaml`.
+- [x] Eventos persistidos en `data/events.jsonl` (reemplazado por PostgreSQL en Fase 2).
 
 **Criterio de salida:** con un celular con IP Webcam apuntando a una puerta, una persona entra en cuadro y llega una notificación a ntfy con foto en < 5 segundos; un gato/perro no dispara notificación; la misma persona quieta en cuadro no genera spam (cooldown funciona); desconectar el celular y reconectarlo recupera el stream solo.
+
+> Validado con webcam de laptop (2026-07-14): detección de persona con confianza 88%, notificación (consola) con captura en <2 s desde la conexión de la fuente, clip y evento persistidos. **Pendiente de validar con el setup real:** celular con IP Webcam, topic de ntfy, prueba de mascota y prueba de reconexión física.
 
 **Duración estimada:** 2–3 semanas.
 

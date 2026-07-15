@@ -1,0 +1,35 @@
+# Configuración de secuh (Fase 1: una cámara).
+# Copiar a config.yaml y ajustar. config.yaml está gitignoreado: los valores
+# reales (URLs con credenciales) nunca se versionan.
+
+camera:
+  name: entrada
+  zone: puerta principal
+  # Fuente de video:
+  #   "0"                                  -> webcam USB local (índice)
+  #   "http://192.168.1.50:8080/video"     -> app IP Webcam (Android)
+  #   "rtsp://usuario:clave@ip:554/stream" -> cámara IP RTSP
+  source: "0"
+  confidence_threshold: 0.5
+  cooldown_seconds: 60
+  analysis_fps: 5.0
+
+detection:
+  model: yolov8n.pt
+  imgsz: 640
+  motion_min_area_ratio: 0.01
+
+notifications:
+  # Log local (desarrollo). Desactivar en producción si hay canal real.
+  console: true
+  # Para ntfy, preferir la variable de entorno SECUH_NTFY_TOPIC en lugar de
+  # escribir el topic aquí (el topic funciona como secreto: quien lo conozca
+  # puede leer tus notificaciones).
+  # ntfy:
+  #   topic_url: https://ntfy.sh/<topic-largo-y-aleatorio>
+
+storage:
+  data_dir: data
+  retention_days: 7
+  clip_pre_seconds: 10
+  clip_post_seconds: 10

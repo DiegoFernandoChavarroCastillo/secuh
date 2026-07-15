@@ -6,7 +6,21 @@ Sistema de videovigilancia inteligente que procesa video en tiempo real (cámara
 - **Plan de desarrollo por fases:** [`plan-de-desarrollo.md`](plan-de-desarrollo.md)
 - **Decisiones de arquitectura:** [`docs/adr/`](docs/adr/README.md)
 
-**Estado actual:** Fase 0 — fundaciones y validación de hardware.
+**Estado actual:** Fase 1 (MVP) — una cámara → detección → notificación, configurado por archivo.
+
+## Ejecutar el MVP
+
+```bash
+cp config.example.yaml config.yaml   # y ajustar (fuente de video, canal, etc.)
+cd backend
+uv sync --all-groups
+uv run python -m secuh --config ../config.yaml
+```
+
+Para notificar por ntfy, exporta el topic como variable de entorno (no lo
+escribas en el YAML): `SECUH_NTFY_TOPIC=https://ntfy.sh/<topic-aleatorio>`.
+La evidencia (capturas y clips) queda en `data/` y se borra automáticamente
+tras `retention_days`.
 
 ## Estructura
 

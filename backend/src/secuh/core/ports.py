@@ -66,6 +66,14 @@ class EventStore(ABC):
     def save(self, event: Event) -> None: ...
 
 
+class SnapshotStore(ABC):
+    """Persistencia de la captura (JPEG) del frame donde se detectó a la persona."""
+
+    @abstractmethod
+    def save(self, event: Event, frame: Frame) -> str:
+        """Guarda la captura y devuelve su ruta."""
+
+
 class ClipRecorder(ABC):
     """Grabación de evidencia alrededor de un evento."""
 

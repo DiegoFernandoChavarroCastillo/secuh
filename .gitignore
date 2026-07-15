@@ -226,6 +226,7 @@ spike/results/
 # Evidencia de eventos (clips y capturas) — jamás versionar video de vigilancia
 clips/
 snapshots/
+data/
 # Configuración local con secretos
 config.yaml
 !config.example.yaml
