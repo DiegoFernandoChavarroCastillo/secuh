@@ -216,3 +216,16 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- secuh ---
+# Pesos de modelos YOLO (Ultralytics los descarga en el primer uso)
+*.pt
+*.onnx
+# Resultados del spike de benchmark (Fase 0)
+spike/results/
+# Evidencia de eventos (clips y capturas) — jamás versionar video de vigilancia
+clips/
+snapshots/
+# Configuración local con secretos
+config.yaml
+!config.example.yaml
