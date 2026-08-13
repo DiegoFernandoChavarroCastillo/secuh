@@ -2,7 +2,8 @@
 name = "secuh"
 version = "0.6.1"
 description = "Sistema de detección de personas para videovigilancia"
-readme = "../README.md"
+# Sin `readme`: hatchling rechaza rutas fuera del directorio del proyecto
+# (el README vive en la raíz del repo) y el paquete no se publica en PyPI.
 requires-python = ">=3.12,<3.14"
 license = { text = "MIT" }
 authors = [{ name = "Diego Chavarro" }]
