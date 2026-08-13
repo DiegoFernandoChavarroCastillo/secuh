@@ -1,0 +1,74 @@
+# syntax=docker/dockerfile:1
+# Imagen del producto completo: panel web + API + workers de detección.
+# Contexto de build: raíz del repo.
+#
+# Usa cache mounts de BuildKit para las descargas de paquetes (npm, uv): en
+# conexiones lentas, un reintento tras un corte de red reutiliza lo ya
+# descargado en vez de bajar todo de nuevo desde cero.
+
+# ---------------------------------------------------------------- panel web
+FROM node:22-alpine AS frontend
+WORKDIR /fe
+COPY frontend/package.json frontend/package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --no-fund --no-audit
+COPY frontend/ ./
+RUN npm run build
+
+# ---------------------------------------------------------------- backend
+FROM python:3.12-slim
+
+# OpenCV necesita librerías gráficas mínimas incluso en headless.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:0.7 /uv /usr/local/bin/uv
+
+WORKDIR /app
+# UV_HTTP_TIMEOUT alto: en conexiones lentas, un wheel grande puede tardar
+# más que el timeout por defecto de uv (30s). UV_CONCURRENT_DOWNLOADS bajo:
+# por defecto uv baja muchos paquetes en paralelo, lo que en una conexión
+# limitada reparte el ancho de banda en hilos delgados y hace más probable
+# que alguno se corte a mitad; con menos descargas simultáneas, cada una
+# tiene más ancho de banda y aguanta mejor los baches de la red.
+ENV UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1 UV_HTTP_TIMEOUT=300 UV_CONCURRENT_DOWNLOADS=4
+
+# Capa de dependencias (se cachea mientras no cambie el lockfile).
+COPY backend/pyproject.toml backend/uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --no-install-project
+
+COPY backend/src ./src
+COPY backend/migrations ./migrations
+COPY backend/alembic.ini ./
+# backend/pyproject.toml declara readme = "../README.md" (el README de la
+# raíz del repo); hay que copiarlo a esa misma ruta relativa (un nivel
+# arriba de /app) para que hatchling pueda construir el paquete "secuh".
+COPY README.md /README.md
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
+
+# Pre-descarga el peso de YOLO en el build (como root, con permiso de
+# escritura en /app). En runtime el contenedor corre como usuario no-root:
+# si el modelo no existe ya en disco, Ultralytics intenta descargarlo ahí
+# mismo y falla con "Permission denied". Descargarlo aquí también evita que
+# el arranque dependa de que GitHub esté alcanzable cada vez.
+RUN .venv/bin/python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"
+
+COPY --from=frontend /fe/dist ./frontend-dist
+
+# Usuario no-root; /data guarda la evidencia (montado como volumen).
+RUN useradd --create-home secuh && mkdir -p /data && chown secuh:secuh /data
+USER secuh
+ENV SECUH_DATA_DIR=/data \
+    SECUH_FRONTEND_DIST=/app/frontend-dist \
+    YOLO_CONFIG_DIR=/data/.ultralytics
+
+EXPOSE 8000
+# Se invocan los binarios del venv directamente (no `uv run`): el entorno ya
+# quedó completo y congelado en el build, y `uv run` intenta reconciliarlo
+# en cada arranque — como el contenedor corre como usuario no-root pero el
+# venv se creó como root, esa reconciliación falla por permisos y además
+# intentaría instalar el grupo "dev" (ruff, mypy...) que no está en la imagen.
+CMD ["sh", "-c", ".venv/bin/alembic upgrade head && .venv/bin/uvicorn --factory secuh.api.app:create_app --host 0.0.0.0 --port 8000"]

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from datetime import time as dtime
 from enum import StrEnum
 from uuid import UUID, uuid4
 
@@ -28,6 +29,48 @@ class CameraState(StrEnum):
     DISARMED = "disarmed"
 
 
+class ScheduleMode(StrEnum):
+    """Cuándo vigila una cámara armada."""
+
+    ALWAYS = "always"
+    NIGHT = "night"  # horario nocturno predefinido
+    CUSTOM = "custom"
+
+
+NIGHT_START = dtime(22, 0)
+NIGHT_END = dtime(6, 0)
+
+
+@dataclass(frozen=True, slots=True)
+class Schedule:
+    """Ventana horaria de vigilancia (hora local del servidor).
+
+    Un rango cuyo inicio es mayor que el fin cruza la medianoche
+    (ej. 22:00 → 06:00 vigila de noche).
+    """
+
+    mode: ScheduleMode = ScheduleMode.ALWAYS
+    start: dtime | None = None
+    end: dtime | None = None
+
+    def is_active(self, at: dtime) -> bool:
+        if self.mode == ScheduleMode.ALWAYS:
+            return True
+        if self.mode == ScheduleMode.NIGHT:
+            start, end = NIGHT_START, NIGHT_END
+        else:
+            if self.start is None or self.end is None:
+                return True  # personalizado sin rango completo: no bloquear
+            start, end = self.start, self.end
+        if start <= end:
+            return start <= at < end
+        return at >= start or at < end  # cruza medianoche
+
+
+# Polígono en coordenadas normalizadas (0..1) relativas al frame.
+Polygon = tuple[tuple[float, float], ...]
+
+
 @dataclass(frozen=True, slots=True)
 class Camera:
     """Cámara registrada en el sistema."""
@@ -42,6 +85,10 @@ class Camera:
     confidence_threshold: float = 0.5
     # Segundos de silencio tras notificar un evento en esta cámara.
     cooldown_seconds: int = 60
+    # Ventana horaria de vigilancia (aplica solo si la cámara está armada).
+    schedule: Schedule = field(default_factory=Schedule)
+    # Zona de detección: fuera de este polígono se ignora todo. None = frame completo.
+    mask_polygon: Polygon | None = None
 
     @staticmethod
     def new(name: str, zone: str, source_type: SourceType, source_url: str) -> Camera:

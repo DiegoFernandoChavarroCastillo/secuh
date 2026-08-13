@@ -27,5 +27,7 @@ Qué implica: costos, límites, qué habría que revisar si cambia el contexto.
 | # | Decisión | Estado |
 |---|---|---|
 | [0001](0001-python-312-y-uv.md) | Python 3.12 + uv como gestor de dependencias | aceptada |
-| [0002](0002-modelo-yolo.md) | YOLOv8n como modelo de detección inicial | aceptada (provisional) |
+| [0002](0002-modelo-yolo.md) | YOLOv8n como modelo de detección inicial | aceptada (confirmada por benchmark) |
 | [0003](0003-linea-base-de-hardware.md) | Línea base de hardware | aceptada (revalidar en hardware de despliegue) |
+| [0004](0004-alcance-de-escalado.md) | Alcance del escalado: cola de inferencia y ByteTrack diferidos | aceptada |
+| [0005](0005-ejecucion-nativa-vs-docker.md) | Ejecución nativa (`run.py`) como alternativa a Docker en Windows | aceptada |

@@ -1,0 +1,44 @@
+# Levanta el producto completo: PostgreSQL + backend + panel web.
+#   cd deploy
+#   cp .env.example .env   # y completar los secretos
+#   docker compose up -d
+#   Panel: http://localhost:8000 (usuario admin / SECUH_ADMIN_PASSWORD)
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: secuh
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?definir en .env}
+      POSTGRES_DB: secuh
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U secuh -d secuh"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SECUH_DATABASE_URL: postgresql+psycopg://secuh:${POSTGRES_PASSWORD}@db:5432/secuh
+      SECUH_SECRET_KEY: ${SECUH_SECRET_KEY:?definir en .env}
+      SECUH_ADMIN_PASSWORD: ${SECUH_ADMIN_PASSWORD:?definir en .env}
+      SECUH_NTFY_TOPIC: ${SECUH_NTFY_TOPIC:-}
+      SECUH_CORS_ORIGINS: '["http://localhost:5173"]'
+    ports:
+      - "8000:8000"
+    volumes:
+      - secuh-data:/data
+
+volumes:
+  pgdata:
+  secuh-data:

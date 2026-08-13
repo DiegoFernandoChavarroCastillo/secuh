@@ -2,6 +2,14 @@
 
 > Documento complementario a `proyecto-deteccion-personas.md`. Define **cómo** se construye el proyecto: fases, arquitectura de código, prácticas, seguridad y criterios de salida de cada etapa.
 
+> **Estado (2026-07-16, v0.6.1):** fases 0–6 implementadas y verificadas, incluyendo
+> `docker compose up` con PostgreSQL real y hardware físico (celular IP Webcam + cámara
+> RTSP). Se encontró y corrigió una serie de bugs reales de la puesta en marcha (ver
+> `CHANGELOG.md` 0.6.1) y se añadió `run.py` como alternativa nativa a Docker,
+> recomendada en Windows (ADR 0005) por una limitación de red de Docker Desktop con
+> cámaras RTSP+UDP. Pendientes de campo: prueba de resistencia de 72 h en hardware de
+> despliegue, y la decisión de negocio sobre el modelo de soporte.
+
 ---
 
 ## 1. Principios rectores
@@ -14,46 +22,57 @@
 
 ---
 
-## 2. Estructura de repositorio propuesta
+## 2. Estructura de repositorio (real, v0.6.0)
 
 ```
 secuh/
 ├── backend/
 │   ├── src/secuh/
 │   │   ├── core/              # Dominio puro: sin FastAPI, sin OpenCV directo
-│   │   │   ├── models.py      # Entidades: Camera, Event, DetectionResult
-│   │   │   ├── ports.py       # Interfaces: VideoSource, Detector, Notifier, EventStore, ClipRecorder
-│   │   │   └── pipeline.py    # Orquestación: movimiento → detección → cooldown → evento
-│   │   ├── detection/         # Adaptadores de visión
-│   │   │   ├── motion.py      # MotionDetector (MOG2)
-│   │   │   ├── yolo.py        # YoloPersonDetector (Ultralytics)
-│   │   │   └── tracking.py    # (fase 5) ByteTrack
-│   │   ├── video/             # Adaptadores de captura
-│   │   │   ├── rtsp.py        # RTSP / HTTP / MJPEG (IP Webcam)
-│   │   │   └── worker.py      # Hilo/proceso por cámara + reconexión
-│   │   ├── notifications/     # Adaptadores de notificación
-│   │   │   ├── base.py        # NotificationAdapter (ABC)
-│   │   │   ├── ntfy.py
-│   │   │   └── telegram.py    # (fase 4)
-│   │   ├── storage/           # Clips y capturas
-│   │   ├── db/                # SQLAlchemy + Alembic (a partir de fase 2)
-│   │   ├── api/               # FastAPI: routers, schemas, deps (a partir de fase 2)
-│   │   └── config.py          # Pydantic Settings
-│   ├── tests/
-│   │   ├── unit/
-│   │   └── integration/
-│   └── pyproject.toml
-├── frontend/                  # React + Vite + TS (a partir de fase 2)
-├── deploy/
-│   ├── docker-compose.yml
-│   └── Dockerfile.backend
+│   │   │   ├── models.py      # Camera, Event, Detection, Schedule, Notification
+│   │   │   ├── ports.py       # VideoSource, MotionDetector, PersonDetector, Notifier,
+│   │   │   │                  #   EventStore, SnapshotStore, ClipRecorder, Clock
+│   │   │   ├── pipeline.py    # horario → movimiento → YOLO → umbral → zona → cooldown → evento
+│   │   │   ├── handler.py     # evento: captura → notificar → clip → persistir (tolerante a fallos)
+│   │   │   ├── geometry.py    # punto-en-polígono (zonas)
+│   │   │   └── clock.py       # MonotonicClock
+│   │   ├── detection/         # motion.py (MOG2 + máscara de zona), yolo.py (con warmup)
+│   │   ├── video/             # source.py (captura + reconexión + redacción de URLs),
+│   │   │                      #   worker.py (hilo por cámara, métricas, último frame)
+│   │   ├── notifications/     # ntfy.py, telegram.py, console.py, factory.py (canales)
+│   │   ├── storage/           # clips.py (buffer circular), snapshots.py, events.py (JSONL F1),
+│   │   │                      #   retention.py (borrado automático de evidencia)
+│   │   ├── db/                # models.py (users/cameras/events/channels), session, event_store
+│   │   ├── api/               # app.py (fábrica + panel estático), security.py, deps.py,
+│   │   │                      #   routers/: auth, cameras, channels, events, stream (SSE)
+│   │   ├── runtime/           # supervisor.py: reconcilia BD↔workers, reinicios, alertas de señal
+│   │   ├── config.py          # Config YAML del modo standalone (Fase 1)
+│   │   ├── settings.py        # ServerSettings por entorno (modo servidor)
+│   │   ├── logging_setup.py   # Logging JSON estructurado
+│   │   └── __main__.py        # Entry point standalone: python -m secuh
+│   ├── migrations/            # Alembic: 0001 inicial, 0002 horarios/zonas, 0003 canales
+│   ├── tests/unit/            # 87 tests con fakes de los puertos (sin hardware)
+│   ├── alembic.ini
+│   └── pyproject.toml         # deps + ruff + mypy (estricto) + pytest
+├── frontend/                  # React + Vite + TS: login, cámaras (+editor de zona),
+│                              #   eventos, canales; estado en vivo por SSE
+├── deploy/                    # docker-compose.yml, Dockerfile.backend (multi-stage con panel),
+│                              #   .env.example
 ├── docs/
-│   ├── architecture.md        # Decisiones y diagramas (se actualiza por fase)
-│   ├── adr/                   # Architecture Decision Records (1 archivo por decisión)
-│   └── runbook.md             # Operación: instalar, arrancar, diagnosticar (fase 6 lo pule)
-├── config.example.yaml
+│   ├── architecture.md        # Arquitectura y flujo en ejecución (actualizado por fase)
+│   ├── adr/                   # 0001 Python+uv · 0002 YOLO · 0003 hardware · 0004 escalado
+│   │                          #   · 0005 ejecución nativa vs. Docker en Windows
+│   ├── runbook.md             # Operación: instalar, diagnosticar, backup, actualizar
+│   ├── guia-ip-webcam.md      # Para el cliente: celular como cámara
+│   └── checklist-instalacion.md
+├── spike/                     # benchmark.py (Fase 0, descartable)
+├── config.example.yaml        # Config del modo standalone
+├── run.py                     # Backend + panel juntos en local, sin Docker (ADR 0005)
+├── CHANGELOG.md
 └── README.md
 ```
+
+Notas vs. la propuesta original: `video/rtsp.py` se llamó `source.py` (cubre RTSP, MJPEG y USB con una sola clase OpenCV); `detection/tracking.py` no existe (ByteTrack diferido, ADR 0004); `notifications/base.py` no hace falta (la interfaz `Notifier` vive en `core/ports.py`, que es donde el dominio la define).
 
 **Regla de dependencias:** `core/` no importa nada de `detection/`, `video/`, `api/` ni `db/`. Los tests unitarios del pipeline corren sin cámara, sin modelo y sin base de datos, usando fakes de las interfaces de `ports.py`.
 
@@ -62,15 +81,17 @@ secuh/
 ## 3. Prácticas transversales (aplican desde el día 1)
 
 ### Código
-- Python ≥ 3.11, type hints en todo el código público, validados con **mypy** (o pyright).
+- Python 3.12 (fijado en `backend/.python-version`; ver ADR 0001), type hints en todo el código público, validados con **mypy** en modo estricto.
 - **ruff** para lint + formato; configuración en `pyproject.toml`.
 - **pytest** con cobertura mínima acordada para `core/` (sugerido: 85%+ en el pipeline; los adaptadores de hardware se cubren con tests de integración marcados y opcionales).
 - Pre-commit hooks: ruff, mypy, detección de secretos (`gitleaks` o `detect-secrets`).
 - Commits atómicos sobre ramas `feature/*` → PR a `develop` → releases a `main`.
 
-### CI (GitHub Actions, desde fase 1)
-- Pipeline mínimo: lint → typecheck → tests unitarios en cada push/PR.
-- A partir de fase 2: build de imágenes Docker + tests de integración con PostgreSQL en servicio.
+### CI (GitHub Actions)
+- Backend: ruff (lint + formato) → mypy → pytest en cada push/PR.
+- Frontend: eslint → build (incluye chequeo de tipos).
+- Pendiente (mejora futura): build de la imagen Docker y tests de integración
+  con PostgreSQL como servicio del workflow.
 
 ### Seguridad
 - **Secretos jamás en el repo**: tokens de ntfy/Telegram y credenciales RTSP van en `.env` (gitignoreado) / variables de entorno; `config.example.yaml` solo con placeholders.
@@ -136,17 +157,28 @@ secuh/
 **Objetivo:** dejar de editar YAML: cámaras y eventos viven en PostgreSQL y se gestionan desde un panel autenticado.
 
 Backend:
-- [ ] PostgreSQL + SQLAlchemy 2.0 + **Alembic** para migraciones desde la primera tabla.
-- [ ] Modelo de datos del documento (§6): `cameras`, `events`, `notification_channels`, más `users`.
-- [ ] API FastAPI: auth (login, JWT/cookie), CRUD de cámaras, armar/desarmar, listado de eventos con paginación, servir capturas/clips autenticado.
-- [ ] El pipeline lee su configuración de la BD y reacciona a cambios (armar/desarmar sin reiniciar el proceso).
-- [ ] `docker-compose.yml`: backend + PostgreSQL + volumen de clips.
+- [x] SQLAlchemy 2.0 + **Alembic** (migración `0001`); compatible PostgreSQL (producción) y SQLite (tests/dev).
+- [x] Modelo de datos: `users`, `cameras`, `events` (`notification_channels` llega con la Fase 4, que es cuando se usa).
+- [x] API FastAPI: login con cookie HttpOnly + rate limiting, CRUD de cámaras (URL con credenciales siempre redactada en las respuestas), armar/desarmar, eventos paginados con filtro por cámara, evidencia servida solo autenticada.
+- [x] `CameraSupervisor`: reconcilia la BD con los workers cada 5s — armar/desarmar/editar sin reiniciar el proceso, detecta workers muertos y los reinicia, YOLO compartido entre cámaras con lock.
+- [x] Admin inicial por `SECUH_ADMIN_PASSWORD` al primer arranque; toda la config del servidor por variables `SECUH_*`.
+- [x] `deploy/`: `docker-compose.yml` (PostgreSQL + backend con volumen de evidencia) + `Dockerfile.backend` (usuario no-root, migraciones al arrancar) + `.env.example`.
 
 Frontend:
-- [ ] React + Vite + TS, con lint/format (eslint + prettier) y CI propio.
-- [ ] Login, vista general de cámaras (estado armada/desarmada, en línea/desconectada), CRUD de cámaras, feed de eventos con miniaturas.
+- [x] React + Vite + TS con eslint y CI propio; fuentes autoalojadas (funciona sin internet).
+- [x] Login, tarjetas de cámara con estado (armada/desarmada, en línea/sin señal, refresco cada 5s), formulario de alta/edición, armar/desarmar, feed de eventos con miniaturas, clip y paginación.
 
 **Criterio de salida:** un usuario no técnico puede dar de alta una cámara, armarla, y revisar los eventos con foto desde el navegador, sin tocar archivos. `docker compose up` levanta todo.
+
+> Validado E2E (2026-07-14, SQLite + uvicorn + webcam): login → crear cámara → armar por API → worker arranca solo, cámara "en línea", persona detectada y persistida en BD con captura y clip descargables (401 sin sesión), desarme en caliente en <6 s.
+>
+> Validado además (2026-07-16) `docker compose up` con PostgreSQL real y hardware
+> físico: requirió corregir varios bugs de la puesta en marcha en Docker (torch
+> descargando CUDA innecesario, permisos del modelo YOLO en runtime, README no
+> copiado al build, `uv run` reconciliando el venv como usuario incorrecto — ver
+> CHANGELOG 0.6.1) y reveló una limitación de red de Docker Desktop en Windows con
+> cámaras RTSP que transmiten por UDP (ADR 0005), que llevó a añadir `run.py` como
+> vía nativa recomendada en Windows.
 
 **Duración estimada:** 3–4 semanas.
 
@@ -155,12 +187,15 @@ Frontend:
 ### Fase 3 — Horarios y zonas de detección
 **Objetivo:** reducir falsos positivos y adaptar la vigilancia al horario del negocio.
 
-- [ ] Horarios por cámara: siempre / nocturno predefinido / rango personalizado (cuidar rangos que cruzan medianoche y zona horaria del servidor).
-- [ ] Máscaras de zona: polígonos por cámara; el movimiento y las detecciones fuera de la zona se ignoran. Editor visual en el panel (dibujar polígono sobre un snapshot de la cámara).
-- [ ] Sensibilidad por cámara desde el panel (umbral de confianza YOLO + umbral de área de movimiento).
-- [ ] Alerta de cámara desconectada como notificación (no solo log): "Cámara Entrada sin señal hace 2 min".
+- [x] Horarios por cámara: siempre / nocturno predefinido / rango personalizado, con rangos que cruzan medianoche (testeado); fuera de horario no se analiza ni graba.
+- [x] Máscaras de zona: polígono normalizado por cámara; el movimiento (MOG2 enmascarado) y las detecciones (centro de caja) fuera de la zona se ignoran. Editor visual en el panel sobre el preview en vivo de la cámara (`GET /api/cameras/{id}/preview`).
+- [x] Sensibilidad por cámara desde el panel (slider de umbral de confianza).
+- [x] Alerta de cámara sin señal como notificación (y aviso de recuperación), con supresión durante el arranque.
+- [x] Migración `0002`.
 
 **Criterio de salida:** una cámara que ve parcialmente la calle deja de notificar peatones al enmascarar esa zona; la detección se activa/desactiva sola según horario configurado.
+
+> Lógica validada con tests (medianoche, polígonos, pipeline); la prueba de campo con calle real queda para la instalación.
 
 **Duración estimada:** 2 semanas.
 
@@ -169,10 +204,11 @@ Frontend:
 ### Fase 4 — Multi-canal de notificaciones
 **Objetivo:** explotar el diseño de adaptadores: canales configurables por cámara.
 
-- [ ] `TelegramAdapter` (bot API, foto + texto) y opcionalmente correo (SMTP).
-- [ ] CRUD de canales en panel: crear canal, probarlo (botón "enviar notificación de prueba"), asignar canales a cámaras.
-- [ ] Política de reintentos/backoff común a todos los adaptadores; registro de `notificado` por evento y por canal.
-- [ ] Prioridades: p. ej. detección en horario armado = prioridad alta en ntfy.
+- [x] `TelegramNotifier` (bot API: sendMessage/sendPhoto con reintentos). Correo SMTP queda como extensión futura de la fábrica.
+- [x] CRUD de canales en el panel con botón "Enviar prueba" y asignación por cámara (checkboxes). Los secretos (tokens) entran por la API pero solo salen redactados.
+- [x] Reintentos con backoff en ambos adaptadores; `notificado` por evento (por-canal llegará si hace falta auditoría más fina).
+- [x] Prioridad alta en detecciones, normal en avisos de recuperación de señal.
+- [x] El supervisor reconstruye los notificadores del worker cuando cambian los canales asignados o su config (sin reiniciar el proceso). Migración `0003`.
 
 **Criterio de salida:** dos cámaras notificando a canales distintos (ntfy y Telegram), configurado 100% desde el panel; el botón de prueba valida un canal antes de asignarlo.
 
@@ -183,11 +219,11 @@ Frontend:
 ### Fase 5 — Multi-cámara a escala y robustez
 **Objetivo:** de "funciona con 2 cámaras" a "funciona con N cámaras de forma sostenida días enteros".
 
-- [ ] Cola de inferencia: los workers de captura encolan frames candidatos; un pool de workers de YOLO (tamaño según CPU/GPU) consume la cola. Backpressure: si la cola se llena, se descartan frames viejos (nunca bloquear la captura).
-- [ ] Tracking (ByteTrack) para distinguir "misma persona sigue en cuadro" vs "persona nueva" y mejorar el anti-duplicados.
-- [ ] Dashboard en tiempo real: estado de cámaras y eventos vía WebSocket/SSE (sin refrescar la página).
-- [ ] Endurecimiento: supervisión del proceso (systemd/docker restart policies), watchdog interno de workers colgados, métricas por cámara visibles en el panel.
-- [ ] Prueba de resistencia documentada: N cámaras × 72 h sin fugas de memoria ni degradación (medir RSS y latencia de inferencia).
+- [x] ~~Cola de inferencia~~ **diferida con justificación** (ADR 0004): con el hardware actual (1–2 cámaras), el lock del detector compartido + el throttle de `analysis_fps` ya dan la serialización y el backpressure; la cola se implementa cuando haya >2 cámaras o GPU.
+- [x] ~~ByteTrack~~ **diferido** (ADR 0004): el tracking de Ultralytics guarda estado por modelo, incompatible con el modelo compartido entre cámaras; requeriría un modelo por cámara que esta RAM no soporta.
+- [x] Dashboard en tiempo real vía SSE (`/api/stream`): estado armado/señal y eventos nuevos llegan al panel sin refrescar.
+- [x] Endurecimiento: reinicio de workers muertos (F2), reconexión con backoff (F1), alerta de señal (F3), restart policies en compose, métricas por worker (uptime, frames, fps efectivos, eventos) expuestas en `GET /api/cameras`.
+- [ ] Prueba de resistencia 72 h: procedimiento y criterios de aceptación documentados en `docs/runbook.md` §6 — **debe correrse en el hardware de despliegue real** (operativa, no automatizable desde aquí).
 
 **Criterio de salida:** el número objetivo de cámaras (definir según hardware del benchmark de fase 0) corre 72 h continuas con notificaciones fiables y el dashboard refleja estado en vivo.
 
@@ -198,12 +234,12 @@ Frontend:
 ### Fase 6 — Empaquetado como producto
 **Objetivo:** que instalarlo en el local de un cliente sea un procedimiento repetible de horas, no un proyecto artesanal.
 
-- [ ] Instalación un-comando (script sobre docker compose) + asistente de primer arranque en el panel (crear usuario admin, dar de alta primera cámara con wizard, probar notificación).
-- [ ] Guía de instalación de IP Webcam en el celular del cliente (con capturas), impresa/PDF.
-- [ ] `docs/runbook.md` completo: diagnóstico de problemas comunes, backup/restore de BD y configuración, actualización de versión.
-- [ ] Actualizaciones: versionado semántico, changelog, procedimiento de upgrade con migraciones automáticas.
-- [ ] Checklist de instalación en sitio (red, posición de cámaras, prueba de detección real, entrega al cliente).
-- [ ] Definir el modelo de soporte: qué monitoreo remoto (si alguno) se ofrece, y sus implicaciones de privacidad.
+- [x] Producto en una sola URL: el Dockerfile compila el panel (multi-stage con Node) y el backend lo sirve en `/`; `docker compose up -d --build` levanta todo. El admin se crea solo al primer arranque y los estados vacíos del panel guían el alta de la primera cámara y el primer canal (con botón de prueba).
+- [x] `docs/guia-ip-webcam.md`: guía paso a paso para el celular del cliente, con tabla de problemas comunes.
+- [x] `docs/runbook.md` completo: instalación, diagnóstico, backup/restore, rotación de secretos, actualización, prueba de resistencia, privacidad.
+- [x] Versionado semántico (v0.6.0) + `CHANGELOG.md`; upgrade = `git pull && docker compose up -d --build` (migraciones automáticas al arrancar).
+- [x] `docs/checklist-instalacion.md`: checklist imprimible de instalación en sitio con "prueba de fuego" ante el dueño.
+- [ ] Definir el modelo de soporte (decisión de negocio: monitoreo remoto sí/no y sus implicaciones de privacidad — requiere decisión del dueño del proyecto).
 
 **Criterio de salida:** una instalación completa en hardware limpio, siguiendo solo la documentación, sin intervención del desarrollador.
 
@@ -213,16 +249,15 @@ Frontend:
 
 ## 5. Resumen de línea de tiempo
 
-| Fase | Alcance | Estimado |
-|---|---|---|
-| 0 | Fundaciones + benchmark de hardware | 1 sem |
-| 1 | MVP: cámara → ntfy | 2–3 sem |
-| 2 | Panel web + PostgreSQL | 3–4 sem |
-| 3 | Horarios y zonas | 2 sem |
-| 4 | Multi-canal | 1–2 sem |
-| 5 | Escala y robustez | 3–4 sem |
-| 6 | Producto | 2–3 sem |
-| **Total** | | **~3.5–5 meses** (a tiempo parcial, ajustar a dedicación real) |
+| Fase | Alcance | Estimado | Estado |
+|---|---|---|---|
+| 0 | Fundaciones + benchmark de hardware | 1 sem | ✅ hecha (benchmark en máquina de desarrollo) |
+| 1 | MVP: cámara → ntfy | 2–3 sem | ✅ hecha, validada con celular real + ntfy real |
+| 2 | Panel web + PostgreSQL | 3–4 sem | ✅ hecha, validada con `docker compose up` + PostgreSQL real |
+| 3 | Horarios y zonas | 2 sem | ✅ hecha |
+| 4 | Multi-canal (ntfy + Telegram) | 1–2 sem | ✅ hecha, validada con ntfy real (recordar asignar el canal a la cámara) |
+| 5 | Escala y robustez | 3–4 sem | ✅ hecha con alcance del ADR 0004 (cola/tracking diferidos; resistencia 72 h pendiente en sitio) |
+| 6 | Producto | 2–3 sem | ✅ hecha; `run.py` (ADR 0005) como alternativa nativa en Windows; falta decisión de modelo de soporte |
 
 ---
 

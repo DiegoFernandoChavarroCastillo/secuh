@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/api.ts","./src/auth.tsx","./src/main.tsx","./src/types.ts","./src/usestream.ts","./src/components/cameraform.tsx","./src/components/zoneeditor.tsx","./src/pages/cameraspage.tsx","./src/pages/channelspage.tsx","./src/pages/eventspage.tsx","./src/pages/loginpage.tsx","./vite.config.ts"],"version":"5.8.3"}

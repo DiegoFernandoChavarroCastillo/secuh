@@ -230,3 +230,5 @@ data/
 # Configuración local con secretos
 config.yaml
 !config.example.yaml
+# Base de datos local de desarrollo
+backend/dev.db

@@ -1,6 +1,6 @@
 [project]
 name = "secuh"
-version = "0.1.0"
+version = "0.6.1"
 description = "Sistema de detección de personas para videovigilancia"
 readme = "../README.md"
 requires-python = ">=3.12,<3.14"
@@ -10,10 +10,22 @@ dependencies = [
     "numpy>=1.26",
     "opencv-python>=4.9",
     "ultralytics>=8.2",
+    # Declarados de forma explícita (aunque ultralytics ya los arrastra) para
+    # que tool.uv.sources los redirija al índice CPU-only; uv no siempre
+    # respeta la redirección de índice en dependencias puramente transitivas.
+    "torch>=2.0",
+    "torchvision>=0.15",
     "pydantic>=2.7",
     "pydantic-settings>=2.2",
     "requests>=2.32",
     "pyyaml>=6.0",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "sqlalchemy>=2.0.36",
+    "alembic>=1.14",
+    "psycopg[binary]>=3.2",
+    "pyjwt>=2.10",
+    "argon2-cffi>=23.1",
 ]
 
 [dependency-groups]
@@ -25,6 +37,7 @@ dev = [
     "pre-commit>=4.0",
     "types-requests",
     "types-pyyaml",
+    "httpx>=0.28",
 ]
 spike = [
     "psutil>=6.0",
@@ -33,6 +46,20 @@ spike = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+# ---------------------------------------------------------------- torch (CPU)
+# ultralytics arrastra torch/torchvision de forma transitiva. Sin fijar esto,
+# la resolución en Linux baja el stack completo de CUDA de NVIDIA (~2.5 GB en
+# paquetes nvidia-*/triton) aunque no haya GPU: este proyecto corre YOLO en
+# CPU (ver ADR 0003). El índice CPU de PyTorch evita esa descarga por completo.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+torchvision = [{ index = "pytorch-cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/secuh"]

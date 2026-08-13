@@ -1,7 +1,7 @@
 # 0002 — YOLOv8n como modelo de detección inicial
 
-- **Estado:** aceptada (provisional, sujeta al benchmark del ADR 0003)
-- **Fecha:** 2026-07-14
+- **Estado:** aceptada (confirmada por el benchmark del ADR 0003: 4.2 fps de análisis en CPU i3, detección fiable)
+- **Fecha:** 2026-07-14 (confirmada 2026-07-15)
 
 ## Contexto
 

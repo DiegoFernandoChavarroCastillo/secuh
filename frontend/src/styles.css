@@ -1,0 +1,746 @@
+/* ============================================================ tokens
+   Panel de guardia: papel frío, tinta azul-noche, ámbar de vigilancia.
+   El ámbar es el color de "estado armado" — como la luz de una alarma. */
+:root {
+  --paper: #fafbf9;
+  --card: #ffffff;
+  --ink: #1c2b36;
+  --ink-soft: #5a6b77;
+  --line: #e2e7e4;
+  --guard: #1f4e6b; /* azul guardia: acciones */
+  --guard-deep: #173d55;
+  --amber: #b97a00; /* armada / vigilando */
+  --amber-soft: #fdf3df;
+  --ok: #2e7d5b; /* señal en línea */
+  --alert: #c0442b; /* evidencia / peligro */
+  --alert-soft: #faeae6;
+
+  --font-display: "Bricolage Grotesque Variable", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --radius: 10px;
+  --shadow: 0 1px 2px rgb(28 43 54 / 0.06), 0 4px 16px rgb(28 43 54 / 0.05);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+h1,
+h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  margin: 0;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+
+/* ============================================================ marca */
+.brand {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.35rem;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.brand-dot {
+  color: var(--amber);
+}
+
+.brand-lg {
+  font-size: 2.2rem;
+}
+
+/* ============================================================ shell */
+.shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  padding: 0.85rem 1.5rem;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.nav {
+  display: flex;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.nav a {
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  color: var(--ink-soft);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.nav a:hover {
+  color: var(--ink);
+  background: var(--paper);
+}
+
+.nav a.active {
+  color: var(--guard-deep);
+  background: #e8eef2;
+}
+
+.topbar-user {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.username {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.content {
+  width: min(1080px, 100% - 3rem);
+  margin: 2rem auto 4rem;
+}
+
+.page-loading {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  color: var(--ink-soft);
+}
+
+.page-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.page-head h1 {
+  font-size: 1.7rem;
+}
+
+.page-count {
+  color: var(--ink-soft);
+}
+
+/* ============================================================ botones */
+.btn {
+  font: inherit;
+  font-weight: 500;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  background: none;
+  color: var(--ink);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--guard);
+  outline-offset: 2px;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.btn-primary {
+  background: var(--guard);
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--guard-deep);
+}
+
+.btn-outline {
+  border-color: var(--guard);
+  color: var(--guard-deep);
+}
+
+.btn-outline:hover:not(:disabled) {
+  background: #e8eef2;
+}
+
+.btn-ghost {
+  color: var(--ink-soft);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.btn-danger:hover:not(:disabled) {
+  color: var(--alert);
+  background: var(--alert-soft);
+}
+
+.btn-block {
+  width: 100%;
+}
+
+.btn-sm {
+  padding: 0.3rem 0.75rem;
+  font-size: 0.9rem;
+}
+
+/* ============================================================ login */
+.login-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(1200px 500px at 50% -10%, #e8eef2 0%, transparent 60%),
+    var(--paper);
+  padding: 1.5rem;
+}
+
+.login-card {
+  width: min(360px, 100%);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  padding: 2.25rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.login-tagline {
+  margin: -0.75rem 0 0.75rem;
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+}
+
+/* ============================================================ campos */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.9rem;
+}
+
+.field > span {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.field input,
+.field select {
+  font: inherit;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+}
+
+.field input[type="range"] {
+  padding: 0;
+  accent-color: var(--guard);
+}
+
+.field-hint {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+
+.form-error {
+  color: var(--alert);
+  background: var(--alert-soft);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  margin: 0 0 0.75rem;
+}
+
+.banner {
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.banner-error {
+  background: var(--alert-soft);
+  color: var(--alert);
+}
+
+/* ============================================================ cámaras
+   La firma del panel: cada cámara es una placa con riel de estado a la
+   izquierda que se enciende en ámbar cuando está armada. */
+.camera-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.1rem;
+}
+
+.camera-card {
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.1rem 1.25rem 1.1rem 1.45rem;
+  overflow: hidden;
+}
+
+.camera-card::before {
+  /* riel de estado */
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 6px;
+  background: var(--line);
+  transition: background 0.3s ease;
+}
+
+.camera-card.is-armed::before {
+  background: var(--amber);
+}
+
+.camera-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.9rem;
+}
+
+.camera-name {
+  font-size: 1.15rem;
+}
+
+.camera-zone {
+  margin: 0.1rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}
+
+.status-chip {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  padding: 0.25rem 0.65rem;
+  white-space: nowrap;
+}
+
+.chip-armed {
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+.chip-disarmed {
+  background: var(--paper);
+  color: var(--ink-soft);
+  border: 1px solid var(--line);
+}
+
+.camera-meta {
+  margin: 0 0 1rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.camera-meta div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: baseline;
+}
+
+.camera-meta dt {
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.camera-meta dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.signal-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 0.4rem;
+  background: var(--line);
+  vertical-align: 1px;
+}
+
+.online .signal-dot {
+  background: var(--ok);
+  animation: watch-pulse 2.4s ease-in-out infinite;
+}
+
+.online {
+  color: var(--ok);
+  font-weight: 500;
+}
+
+.offline {
+  color: var(--ink-soft);
+}
+
+@keyframes watch-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(46 125 91 / 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgb(46 125 91 / 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .online .signal-dot {
+    animation: none;
+  }
+}
+
+.camera-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+/* ============================================================ eventos */
+.event-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.event-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--alert);
+  border-radius: var(--radius);
+  padding: 0.7rem 1rem;
+}
+
+.event-thumb {
+  width: 96px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 6px;
+  display: block;
+  background: var(--paper);
+}
+
+.event-thumb-empty {
+  display: grid;
+  place-items: center;
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  border: 1px dashed var(--line);
+}
+
+.event-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.event-title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.event-camera {
+  color: var(--guard-deep);
+  font-weight: 500;
+}
+
+.event-meta {
+  margin: 0.15rem 0 0;
+  color: var(--ink-soft);
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  color: var(--ink-soft);
+}
+
+/* ============================================================ vacíos */
+.empty {
+  text-align: center;
+  padding: 3.5rem 1rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  color: var(--ink);
+}
+
+.empty p {
+  margin: 0.25rem 0;
+  font-weight: 600;
+}
+
+.empty .empty-hint {
+  font-weight: 400;
+  color: var(--ink-soft);
+  max-width: 46ch;
+  margin: 0.35rem auto 0;
+}
+
+/* ============================================================ canales */
+.channels-layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 760px) {
+  .channels-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.channel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.channel-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1rem 1.2rem;
+}
+
+.channel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.channel-name {
+  font-size: 1.05rem;
+}
+
+.channel-config {
+  margin: 0.15rem 0 0;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.channel-test-result {
+  margin: 0 0 0.6rem;
+  color: var(--ink-soft);
+}
+
+.channel-form {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.4rem;
+  position: sticky;
+  top: 5rem;
+}
+
+.channel-picker {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem 0.8rem;
+  margin: 0 0 0.9rem;
+}
+
+.channel-picker legend {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  padding: 0 0.3rem;
+}
+
+.channel-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+}
+
+.channel-option input {
+  accent-color: var(--guard);
+}
+
+.channel-type {
+  color: var(--ink-soft);
+}
+
+/* ============================================================ zona */
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.zone-help {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  margin: 0 0 0.9rem;
+}
+
+.zone-canvas {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--ink);
+  aspect-ratio: 4 / 3;
+}
+
+.zone-canvas img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.zone-canvas svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
+.zone-polygon {
+  fill: rgb(185 122 0 / 0.25);
+  stroke: var(--amber);
+  stroke-width: 0.5;
+}
+
+.zone-vertex {
+  fill: var(--amber);
+  stroke: #fff;
+  stroke-width: 0.35;
+}
+
+.zone-no-signal {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  padding: 2rem;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.zone-status {
+  color: var(--ink-soft);
+  margin: 0.6rem 0 0;
+}
+
+.modal-wide {
+  width: min(640px, 100%);
+}
+
+/* ============================================================ modal */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(28 43 54 / 0.45);
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  z-index: 50;
+}
+
+.modal {
+  width: min(440px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--card);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  padding: 1.75rem;
+}
+
+.modal-title {
+  font-size: 1.25rem;
+  margin-bottom: 1.1rem;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+}
+
+/* ============================================================ responsive */
+@media (max-width: 640px) {
+  .topbar {
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding: 0.75rem 1rem;
+  }
+
+  .nav {
+    order: 3;
+    width: 100%;
+  }
+
+  .content {
+    width: calc(100% - 2rem);
+    margin-top: 1.25rem;
+  }
+
+  .event-row {
+    flex-wrap: wrap;
+  }
+}

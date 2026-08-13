@@ -7,6 +7,7 @@ exponencial y solo loggea (nunca lanza) — la cámara puede volver.
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import time
 from collections.abc import Iterator
@@ -18,6 +19,12 @@ import cv2
 from secuh.core.ports import Frame, VideoSource
 
 logger = logging.getLogger(__name__)
+
+# Fuerza transporte RTSP por TCP: muchas cámaras ONVIF/RTSP (sobre todo
+# económicas) fallan la negociación por UDP con "Nonmatching transport in
+# server reply". Es una variable de entorno leída por el backend FFmpeg de
+# OpenCV al abrir cada captura; no afecta a fuentes HTTP/MJPEG ni USB.
+os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "rtsp_transport;tcp")
 
 
 def redact_url(source: str) -> str:
@@ -92,3 +99,19 @@ class OpenCvVideoSource(VideoSource):
 
     def close(self) -> None:
         self._closed.set()
+
+
+def grab_single_frame(source: str, attempts: int = 10) -> Frame | None:
+    """Abre la fuente, captura un frame y la libera (para previews puntuales)."""
+    capture = cv2.VideoCapture(int(source) if source.isdigit() else source)
+    try:
+        if not capture.isOpened():
+            return None
+        for _ in range(attempts):
+            ok, frame = capture.read()
+            if ok:
+                return cast(Frame, frame)
+            time.sleep(0.2)
+        return None
+    finally:
+        capture.release()
