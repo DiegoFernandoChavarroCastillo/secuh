@@ -60,7 +60,7 @@ class Notifier(ABC):
 
 
 class EventStore(ABC):
-    """Persistencia de eventos (en Fase 1 un archivo/log, en Fase 2 PostgreSQL)."""
+    """Persistencia de eventos (JSONL en modo standalone, BD en modo servidor)."""
 
     @abstractmethod
     def save(self, event: Event) -> None: ...

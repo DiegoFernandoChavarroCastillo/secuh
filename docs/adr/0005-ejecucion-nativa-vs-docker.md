@@ -56,6 +56,15 @@ Genera `backend/.env` con credenciales aleatorias en el primer arranque.
 - En modo nativo, el modelo YOLO se descarga en el primer armado de cámara
   (no viene pre-empaquetado como en la imagen Docker desde 0.6.1), así que el
   primer arranque de una cámara tarda más.
+- `run.py` no tiene el equivalente al `restart: unless-stopped` del compose:
+  es un proceso en primer plano atado a la sesión del usuario, y el panel lo
+  sirve el servidor de desarrollo de Vite. Para una instalación desatendida
+  hay que programar el arranque a mano (pasos en
+  `docs/checklist-instalacion.md`). Es la razón de fondo por la que Docker
+  sobre Linux sigue siendo la vía de producción y esta es la vía de un solo
+  equipo: si alguna vez la ejecución nativa tuviera que soportar
+  instalaciones desatendidas de verdad, lo que falta es empaquetarla como
+  servicio (panel compilado en vez de dev server, y un supervisor del SO).
 - Si en el futuro se evalúa correr Docker Desktop con WSL2 en modo
   *mirrored networking* (una opción más reciente que puede resolver el
   problema de NAT sin los inconvenientes del modo host) valdría la pena

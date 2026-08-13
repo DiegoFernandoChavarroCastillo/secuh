@@ -2,7 +2,9 @@
 
 Sistema de videovigilancia inteligente que procesa video en tiempo real (cámaras IP RTSP, celular vía IP Webcam, o webcam USB), detecta específicamente **personas** (no animales ni mascotas), y envía notificaciones inmediatas con foto al teléfono del dueño — mientras está ocurriendo, no después.
 
-**Estado:** v0.6.1 — fases 0–6 del plan completadas ([`CHANGELOG.md`](CHANGELOG.md)).
+**Estado:** v0.6.2 — fases 0–6 del plan implementadas ([`CHANGELOG.md`](CHANGELOG.md)).
+Quedan dos pendientes que no son de código: la prueba de resistencia de 72 h en
+el hardware donde se instale, y la decisión sobre el modelo de soporte.
 
 | Qué hace | Cómo |
 |---|---|
@@ -39,6 +41,12 @@ primera vez genera `backend/.env` con una contraseña de admin aleatoria y la
 imprime en pantalla — no se vuelve a mostrar, pero queda guardada ahí.
 `Ctrl+C` apaga los dos procesos.
 
+Si `uv` no quedó en el PATH (habitual en Windows), usar `python -m uv sync
+--all-groups`; igual con cualquier otro `uv ...` de este README. Y ojo: `run.py`
+corre en primer plano, no arranca solo al encender el equipo — para dejarlo
+desatendido hay que programar el arranque ([checklist](docs/checklist-instalacion.md),
+sección "Arranque desatendido").
+
 **¿Por qué nativo y no Docker?** Docker Desktop en Windows virtualiza la red
 (WSL2/Hyper-V): las cámaras RTSP que transmiten vídeo por UDP no pueden
 recibirse dentro del contenedor porque el paquete de vuelta no tiene cómo
@@ -58,6 +66,10 @@ canal de notificación y asígnalo a cada cámara** (Editar cámara → Canales 
 notificación — sin esto, los eventos no se notifican aunque el botón
 "Enviar prueba" del canal sí funcione), da de alta una cámara y ármala. Para
 usar un celular como cámara: [`docs/guia-ip-webcam.md`](docs/guia-ip-webcam.md).
+
+Los ajustes del servidor (retención de evidencia, resolución de inferencia,
+duración de sesión…) van por variables `SECUH_*`: tabla y cómo aplicarlas en
+cada modo en [`docs/runbook.md`](docs/runbook.md) §8.
 
 ## Desarrollo
 
@@ -100,7 +112,7 @@ backend/
     api/            FastAPI: auth, cámaras, canales, eventos, SSE; sirve el panel en /
     runtime/        Supervisor: reconcilia BD <-> workers (armado en caliente)
   migrations/       Alembic (0001-0003)
-  tests/unit/       87 tests con fakes (sin hardware)
+  tests/unit/       89 tests con fakes (sin hardware)
 frontend/           Panel React + Vite + TS (login, cámaras, eventos, canales, editor de zona)
 deploy/             docker-compose + Dockerfile multi-stage (panel empaquetado)
 spike/              Benchmark descartable de Fase 0

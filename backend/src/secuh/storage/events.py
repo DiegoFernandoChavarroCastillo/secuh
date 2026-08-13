@@ -1,4 +1,7 @@
-"""Registro de eventos en JSONL (Fase 1). En Fase 2 lo reemplaza PostgreSQL."""
+"""Registro de eventos en JSONL, para el modo standalone (sin base de datos).
+
+En modo servidor el equivalente es ``secuh.db.event_store.DbEventStore``.
+"""
 
 from __future__ import annotations
 

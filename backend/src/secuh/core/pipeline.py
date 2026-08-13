@@ -1,9 +1,9 @@
 """Orquestación del pipeline de detección.
 
-Flujo por frame: movimiento -> detección de personas -> umbral de confianza
--> cooldown -> evento. La implementación completa (grabación de clips,
-notificación, persistencia) se integra en la Fase 1; aquí vive la lógica
-pura que ya es testeable sin hardware.
+Flujo por frame: horario activo -> movimiento -> detección de personas ->
+umbral de confianza -> zona -> cooldown -> evento. Lo que se hace *con* el
+evento (captura, notificación, clip, persistencia) vive en ``handler.py``:
+aquí solo hay lógica pura, testeable sin hardware.
 """
 
 from __future__ import annotations

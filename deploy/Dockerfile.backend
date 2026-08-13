@@ -42,10 +42,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY backend/src ./src
 COPY backend/migrations ./migrations
 COPY backend/alembic.ini ./
-# backend/pyproject.toml declara readme = "../README.md" (el README de la
-# raíz del repo); hay que copiarlo a esa misma ruta relativa (un nivel
-# arriba de /app) para que hatchling pueda construir el paquete "secuh".
-COPY README.md /README.md
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 

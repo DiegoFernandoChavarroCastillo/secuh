@@ -1,4 +1,7 @@
-"""EventStore sobre la base de datos (reemplaza al JSONL de Fase 1)."""
+"""EventStore sobre la base de datos, para el modo servidor.
+
+El equivalente del modo standalone es ``secuh.storage.events`` (JSONL).
+"""
 
 from __future__ import annotations
 

@@ -20,9 +20,9 @@ El paquete `backend/src/secuh/core/` contiene el dominio puro:
 - `geometry.py` — punto-en-polígono para las zonas (sin OpenCV).
 
 **Regla:** `core/` no importa OpenCV, Ultralytics, FastAPI ni SQLAlchemy.
-Los adaptadores (`detection/`, `video/`, `notifications/`, `storage/`, y más
-adelante `db/`, `api/`) implementan los puertos. Los tests unitarios del
-pipeline corren con fakes, sin cámara ni modelo (`backend/tests/unit/`).
+Los adaptadores (`detection/`, `video/`, `notifications/`, `storage/`, `db/`,
+`api/`) implementan los puertos. Los tests unitarios del pipeline corren con
+fakes, sin cámara ni modelo (`backend/tests/unit/`).
 
 ## Flujo en ejecución (por cámara)
 
@@ -68,6 +68,11 @@ FastAPI (api/)                         CameraSupervisor (runtime/)
 - Eventos → `DbEventStore` (PostgreSQL en producción, SQLite en dev/tests).
 - Migraciones con Alembic (`backend/migrations/`); el contenedor corre
   `alembic upgrade head` antes de uvicorn.
+- `GET /api/health` (sin autenticación) reporta estado y número de workers
+  vivos; es lo que consulta el `healthcheck` del contenedor.
+- Toda la configuración del modo servidor entra por variables `SECUH_*`
+  (`settings.py`); las que se tocan en una instalación están tabuladas en
+  `runbook.md` §8.
 - El modo standalone de Fase 1 (`python -m secuh --config config.yaml`) sigue
   disponible para instalaciones mínimas sin panel ni BD.
 - `run.py` (raíz del repo) levanta este mismo modo servidor (backend + panel)
@@ -90,10 +95,10 @@ FastAPI (api/)                         CameraSupervisor (runtime/)
 
 - **Fase 0 (hecha):** esqueleto + puertos + pipeline/cooldown testeados +
   benchmark de hardware (`spike/benchmark.py`, ADR 0003).
-- **Fase 1 (hecha, pendiente validación con celular real):** adaptadores
+- **Fase 1 (hecha, validada con celular real + ntfy):** adaptadores
   reales (MOG2, YOLO, captura con reconexión, ntfy, clips, retención),
   config YAML validada, logging JSON, entry point `python -m secuh`.
-- **Fase 2 (hecha, pendiente `docker compose up` con PostgreSQL):** BD +
+- **Fase 2 (hecha, validada con `docker compose up` + PostgreSQL real):** BD +
   Alembic, API FastAPI autenticada, supervisor con reconciliación y
   auto-reinicio, panel React (`frontend/`), `deploy/` con compose.
 - **Fase 3 (hecha):** horarios por cámara (con cruce de medianoche), zonas de
@@ -106,3 +111,7 @@ FastAPI (api/)                         CameraSupervisor (runtime/)
   métricas por worker; cola de inferencia y ByteTrack diferidos.
 - **Fase 6 (hecha):** imagen única con panel empaquetado, runbook, guía de
   IP Webcam, checklist de instalación, changelog y versionado.
+
+Pendientes que no son de código y quedan para la instalación real: la prueba
+de resistencia de 72 h (procedimiento en `runbook.md` §6) y la decisión de
+negocio sobre el modelo de soporte.

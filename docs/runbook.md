@@ -40,17 +40,27 @@ credenciales la primera vez (se imprimen una sola vez en pantalla).
 `Ctrl+C` apaga ambos procesos. Para volver a arrancar en otra sesión, mismo
 comando — reutiliza `backend/.env` y `backend/dev.db` ya existentes.
 
+> Si `uv` no quedó en el PATH (habitual en Windows), usar `python -m uv sync
+> --all-groups` en su lugar. Lo mismo aplica a cualquier `uv run ...` de esta
+> guía.
+
+`run.py` corre en primer plano: **no arranca solo al encender el equipo**. Si
+la instalación queda desatendida hay que darle arranque automático con el
+Programador de tareas de Windows — pasos en
+[`checklist-instalacion.md`](checklist-instalacion.md), sección "Arranque
+desatendido", donde también están los límites de esta vía frente a Docker.
+
 ## 2. Diagnóstico rápido
 
 | Síntoma | Revisar |
 |---|---|
-| Panel no carga | `docker compose ps` (¿backend healthy?), `docker compose logs backend --tail 50` |
+| Panel no carga | `docker compose ps` (¿backend `healthy`?), `docker compose logs backend --tail 50`. El healthcheck consulta `GET /api/health`, que además devuelve cuántos workers de cámara corren (`cameras_running`) |
 | Cámara "sin señal" | ¿El celular tiene IP Webcam abierta y pantalla encendida? ¿Misma red WiFi? Probar la URL del stream en un navegador. Si es una cámara RTSP y corres en **Docker Desktop (Windows)**: puede ser la limitación de red de §2.1 — probar con `run.py` (nativo) para descartarlo |
 | El botón "Enviar prueba" del canal funciona, pero **los eventos reales no notifican** | El canal debe **asignarse a la cámara** (Editar cámara → Canales de notificación). Sin canales propios asignados, la cámara usa el canal global del servidor (consola por defecto, o `SECUH_NTFY_TOPIC` si está definida) — no los canales creados en el panel. Verificar en `GET /api/cameras` que `channel_ids` no esté vacío |
 | No llegan notificaciones (canal sí asignado) | Panel → Canales → **Enviar prueba**. Si falla: revisar topic/token. Evento con "sin notificar" en el feed = canal caído en ese momento |
 | Falsas alarmas | Subir sensibilidad de la cámara (panel) o dibujar zona de detección excluyendo calle/vegetación |
 | No detecta | Bajar sensibilidad; verificar horario de vigilancia de la cámara; verificar que está **armada** |
-| CPU al 100% sostenido | Ver métricas de la cámara en la API (`/api/cameras`): si `achieved_analysis_fps` < objetivo, bajar `analysis_fps` o `imgsz` (`SECUH_IMGSZ=480`) |
+| CPU al 100% sostenido | Ver métricas de la cámara en la API (`/api/cameras`): si `achieved_analysis_fps` < objetivo, bajar `analysis_fps` (por cámara, en el panel) o `SECUH_IMGSZ` a 480 (global, ver §8) |
 
 Los logs son JSON por línea: `docker compose logs backend | grep '"level": "ERROR"'`.
 En modo nativo (`run.py`), los logs salen directo en la terminal donde corre.
@@ -137,3 +147,35 @@ de arrancar el servidor. Ver `CHANGELOG.md` antes de actualizar.
   aumentar sin necesidad ni consentimiento del dueño.
 - El acceso al panel es personal: no compartir la contraseña; una instalación
   = un responsable identificado.
+
+## 8. Referencia de configuración
+
+Todo el modo servidor se configura por variables de entorno con prefijo
+`SECUH_` (definición completa y valores por defecto en
+`backend/src/secuh/settings.py`). Las que se tocan en una instalación:
+
+| Variable | Default | Para qué |
+|---|---|---|
+| `SECUH_SECRET_KEY` | — | Firma las sesiones. **Obligatoria**; cambiarla desloguea a todos |
+| `SECUH_ADMIN_PASSWORD` | — | Contraseña del admin creado en el primer arranque |
+| `SECUH_DATABASE_URL` | PostgreSQL local | La arma el compose; en modo nativo `run.py` la fija a SQLite |
+| `SECUH_NTFY_TOPIC` | (vacío) | Canal global de respaldo, para cámaras sin canales propios asignados |
+| `SECUH_RETENTION_DAYS` | `7` | Días que se guarda la evidencia antes del borrado automático |
+| `SECUH_IMGSZ` | `640` | Resolución de inferencia. `480` alivia CPU a costa de alcance |
+| `SECUH_CLIP_PRE_SECONDS` / `_POST_` | `10` / `10` | Segundos de clip antes y después del evento |
+| `SECUH_SESSION_TTL_HOURS` | `12` | Duración de la sesión del panel |
+
+**Cómo se aplican, según el modo de ejecución:**
+
+- **Docker:** editar `deploy/.env` y `docker compose up -d`. Ojo: compose solo
+  entrega al contenedor las variables **listadas en el bloque `environment:`**
+  de `docker-compose.yml` — poner una variable nueva en `.env` no basta, hay
+  que añadirla también ahí (las de la tabla ya están).
+- **Nativo (`run.py`):** editar `backend/.env`, que se lee directo al arrancar.
+  Ahí sí vale cualquier variable de `settings.py` sin más trámite.
+
+No exponer `SECUH_MODEL` en Docker: la imagen pre-descarga `yolov8n.pt` en el
+build, y pedir otro peso haría que Ultralytics intente bajarlo en runtime como
+usuario no-root y falle con `PermissionError` (el bug corregido en 0.6.1).
+Para cambiar de modelo, cambiarlo también en el `RUN` de pre-descarga del
+`Dockerfile.backend` y reconstruir.

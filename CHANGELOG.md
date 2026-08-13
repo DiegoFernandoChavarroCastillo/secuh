@@ -3,6 +3,47 @@
 Versionado semántico. Las migraciones de BD se aplican automáticamente al
 actualizar (ver `docs/runbook.md` §4).
 
+## 0.6.2 — 2026-08-13
+
+Cierre de los huecos que impedían cumplir el criterio de salida de la Fase 6:
+instalar y configurar siguiendo solo la documentación.
+
+### Corregido
+- **El paquete no se construía en un entorno limpio:** `backend/pyproject.toml`
+  declaraba `readme = "../README.md"` y hatchling rechaza rutas fuera del
+  directorio del proyecto, así que `uv sync` fallaba al construir `secuh`
+  (visible en el CI de GitHub Actions, donde el entorno siempre es nuevo; en
+  local pasaba desapercibido porque el paquete ya estaba instalado). Se quitó
+  el campo — el paquete no se publica — y con él el `COPY README.md`
+  del `Dockerfile.backend`, que solo existía para sortear esa referencia.
+- **Los ajustes operativos no llegaban al contenedor:** compose entrega
+  únicamente las variables listadas en su bloque `environment:`, así que
+  `SECUH_RETENTION_DAYS` (que el checklist manda acordar con el dueño) y
+  `SECUH_IMGSZ` (la palanca de CPU del runbook) no hacían nada por más que se
+  definieran en `.env`. Ahora se pasan de forma explícita, junto con la
+  duración de los clips y el TTL de sesión.
+- **El backend no tenía `healthcheck`** pese a que el runbook mandaba
+  comprobar si estaba `healthy`. Añadido contra `GET /api/health`, con tests
+  que fijan que ese endpoint siga siendo público.
+
+### Añadido
+- `docs/runbook.md` §8: referencia de las variables `SECUH_*` que se tocan en
+  una instalación, con sus valores por defecto y cómo se aplican en cada modo
+  de ejecución.
+- `docs/checklist-instalacion.md`: cubre las dos vías de instalación (Docker
+  sobre Linux / nativa con `run.py` en Windows) y añade la sección "Arranque
+  desatendido" — `run.py` **no arranca solo al encender el equipo**, así que
+  la prueba de reinicio del checklist no se podía aprobar sin configurarlo a
+  mano en el Programador de tareas.
+
+### Documentación
+- `docs/architecture.md` estaba congelado en un estado anterior a la 0.6.1:
+  daba como pendientes validaciones (celular real, `docker compose up` con
+  PostgreSQL) que ya se habían hecho el 2026-07-16.
+- README y runbook advierten que en Windows `uv` suele no estar en el PATH
+  (`python -m uv ...`), y el README ya no dice "fases completadas" sin
+  matizar los dos pendientes operativos.
+
 ## 0.6.1 — 2026-07-16
 
 Endurecimiento tras la primera puesta en marcha real (Docker + cámaras físicas).

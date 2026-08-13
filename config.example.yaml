@@ -1,4 +1,6 @@
-# Configuración de secuh (Fase 1: una cámara).
+# Configuración del modo standalone de secuh: una cámara, sin panel ni base
+# de datos (`python -m secuh --config config.yaml`). El modo servidor, que es
+# el habitual, no usa este archivo: se configura por variables SECUH_*.
 # Copiar a config.yaml y ajustar. config.yaml está gitignoreado: los valores
 # reales (URLs con credenciales) nunca se versionan.
 

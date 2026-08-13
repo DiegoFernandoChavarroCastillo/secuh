@@ -46,7 +46,9 @@ class ServerSettings(BaseSettings):
     clip_pre_seconds: float = Field(default=10.0, ge=0)
     clip_post_seconds: float = Field(default=10.0, ge=0)
 
-    # --- notificaciones (global; por-cámara llega en Fase 4) ---
+    # --- notificaciones ---
+    # Canal global de respaldo: solo se usa en cámaras que no tienen canales
+    # propios asignados en la BD (ver notifications/factory.py).
     ntfy_topic: str | None = None
     console_notifier: bool = True
 

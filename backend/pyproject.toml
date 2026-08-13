@@ -1,6 +1,6 @@
 [project]
 name = "secuh"
-version = "0.6.1"
+version = "0.6.2"
 description = "Sistema de detección de personas para videovigilancia"
 # Sin `readme`: hatchling rechaza rutas fuera del directorio del proyecto
 # (el README vive en la raíz del repo) y el paquete no se publica en PyPI.

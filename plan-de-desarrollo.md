@@ -2,13 +2,16 @@
 
 > Documento complementario a `proyecto-deteccion-personas.md`. Define **cómo** se construye el proyecto: fases, arquitectura de código, prácticas, seguridad y criterios de salida de cada etapa.
 
-> **Estado (2026-07-16, v0.6.1):** fases 0–6 implementadas y verificadas, incluyendo
+> **Estado (2026-08-13, v0.6.2):** fases 0–6 implementadas y verificadas, incluyendo
 > `docker compose up` con PostgreSQL real y hardware físico (celular IP Webcam + cámara
 > RTSP). Se encontró y corrigió una serie de bugs reales de la puesta en marcha (ver
 > `CHANGELOG.md` 0.6.1) y se añadió `run.py` como alternativa nativa a Docker,
 > recomendada en Windows (ADR 0005) por una limitación de red de Docker Desktop con
-> cámaras RTSP+UDP. Pendientes de campo: prueba de resistencia de 72 h en hardware de
-> despliegue, y la decisión de negocio sobre el modelo de soporte.
+> cámaras RTSP+UDP. La 0.6.2 cerró los huecos que impedían cumplir el criterio de
+> salida de la Fase 6 ("instalar siguiendo solo la documentación"): ajustes que no
+> llegaban al contenedor, healthcheck del backend y checklist de la vía nativa.
+> Pendientes de campo: prueba de resistencia de 72 h en hardware de despliegue, y la
+> decisión de negocio sobre el modelo de soporte.
 
 ---
 
@@ -22,7 +25,7 @@
 
 ---
 
-## 2. Estructura de repositorio (real, v0.6.0)
+## 2. Estructura de repositorio (real, v0.6.2)
 
 ```
 secuh/
@@ -51,7 +54,7 @@ secuh/
 │   │   ├── logging_setup.py   # Logging JSON estructurado
 │   │   └── __main__.py        # Entry point standalone: python -m secuh
 │   ├── migrations/            # Alembic: 0001 inicial, 0002 horarios/zonas, 0003 canales
-│   ├── tests/unit/            # 87 tests con fakes de los puertos (sin hardware)
+│   ├── tests/unit/            # 89 tests con fakes de los puertos (sin hardware)
 │   ├── alembic.ini
 │   └── pyproject.toml         # deps + ruff + mypy (estricto) + pytest
 ├── frontend/                  # React + Vite + TS: login, cámaras (+editor de zona),
@@ -62,9 +65,10 @@ secuh/
 │   ├── architecture.md        # Arquitectura y flujo en ejecución (actualizado por fase)
 │   ├── adr/                   # 0001 Python+uv · 0002 YOLO · 0003 hardware · 0004 escalado
 │   │                          #   · 0005 ejecución nativa vs. Docker en Windows
-│   ├── runbook.md             # Operación: instalar, diagnosticar, backup, actualizar
+│   ├── runbook.md             # Operación: instalar, diagnosticar, backup, actualizar,
+│   │                          #   referencia de variables SECUH_* (§8)
 │   ├── guia-ip-webcam.md      # Para el cliente: celular como cámara
-│   └── checklist-instalacion.md
+│   └── checklist-instalacion.md  # Imprimible, con las dos vías (Docker / nativa)
 ├── spike/                     # benchmark.py (Fase 0, descartable)
 ├── config.example.yaml        # Config del modo standalone
 ├── run.py                     # Backend + panel juntos en local, sin Docker (ADR 0005)
@@ -111,7 +115,7 @@ Notas vs. la propuesta original: `video/rtsp.py` se llamó `source.py` (cubre RT
 
 ### Observabilidad
 - Logging estructurado (`structlog` o `logging` + JSON) desde el MVP: cada evento de detección, notificación enviada/fallida y reconexión de cámara queda trazado.
-- Métricas internas simples por cámara: fps procesados, latencia de inferencia, ratio de frames con movimiento, notificaciones enviadas. Primero expuestas en logs/endpoint `/health`; formato Prometheus si algún día hace falta.
+- Métricas internas simples por cámara: fps procesados, latencia de inferencia, ratio de frames con movimiento, notificaciones enviadas. Expuestas en `GET /api/cameras` (por cámara) y en `GET /api/health` (estado global + workers vivos, que es además lo que consulta el healthcheck del contenedor); formato Prometheus si algún día hace falta.
 
 ---
 
@@ -237,8 +241,9 @@ Frontend:
 - [x] Producto en una sola URL: el Dockerfile compila el panel (multi-stage con Node) y el backend lo sirve en `/`; `docker compose up -d --build` levanta todo. El admin se crea solo al primer arranque y los estados vacíos del panel guían el alta de la primera cámara y el primer canal (con botón de prueba).
 - [x] `docs/guia-ip-webcam.md`: guía paso a paso para el celular del cliente, con tabla de problemas comunes.
 - [x] `docs/runbook.md` completo: instalación, diagnóstico, backup/restore, rotación de secretos, actualización, prueba de resistencia, privacidad.
-- [x] Versionado semántico (v0.6.0) + `CHANGELOG.md`; upgrade = `git pull && docker compose up -d --build` (migraciones automáticas al arrancar).
-- [x] `docs/checklist-instalacion.md`: checklist imprimible de instalación en sitio con "prueba de fuego" ante el dueño.
+- [x] Versionado semántico (v0.6.2) + `CHANGELOG.md`; upgrade = `git pull && docker compose up -d --build` (migraciones automáticas al arrancar).
+- [x] `docs/checklist-instalacion.md`: checklist imprimible de instalación en sitio con "prueba de fuego" ante el dueño, con las dos vías (Docker/Linux y nativa/Windows) y el arranque desatendido de esta última.
+- [x] Configuración operativa alcanzable desde la documentación: variables `SECUH_*` tabuladas en el runbook (§8), expuestas en `docker-compose.yml` y comentadas en `.env.example`; healthcheck del backend contra `/api/health`.
 - [ ] Definir el modelo de soporte (decisión de negocio: monitoreo remoto sí/no y sus implicaciones de privacidad — requiere decisión del dueño del proyecto).
 
 **Criterio de salida:** una instalación completa en hardware limpio, siguiendo solo la documentación, sin intervención del desarrollador.
@@ -257,7 +262,7 @@ Frontend:
 | 3 | Horarios y zonas | 2 sem | ✅ hecha |
 | 4 | Multi-canal (ntfy + Telegram) | 1–2 sem | ✅ hecha, validada con ntfy real (recordar asignar el canal a la cámara) |
 | 5 | Escala y robustez | 3–4 sem | ✅ hecha con alcance del ADR 0004 (cola/tracking diferidos; resistencia 72 h pendiente en sitio) |
-| 6 | Producto | 2–3 sem | ✅ hecha; `run.py` (ADR 0005) como alternativa nativa en Windows; falta decisión de modelo de soporte |
+| 6 | Producto | 2–3 sem | ✅ hecha; `run.py` (ADR 0005) como alternativa nativa en Windows; documentación de instalación cerrada en 0.6.2; falta decisión de modelo de soporte |
 
 ---
 
