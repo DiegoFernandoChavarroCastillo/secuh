@@ -116,6 +116,22 @@ class Detection:
 
 
 @dataclass(frozen=True, slots=True)
+class SceneObject:
+    """Objeto observado en la escena de un evento.
+
+    A diferencia de ``Detection``, esto **no dispara nada**: se registra como
+    contexto de un evento que ya fue confirmado por el pipeline. Las etiquetas
+    son las clases COCO en inglés (``dog``, ``car``, ``backpack``) y se guardan
+    así a propósito: son un identificador estable del dataset, no un texto de
+    interfaz. La traducción al español vive en el panel.
+    """
+
+    label: str
+    confidence: float
+    box: BoundingBox
+
+
+@dataclass(frozen=True, slots=True)
 class Event:
     """Evento de detección de persona confirmado (tras cooldown y filtros)."""
 
@@ -126,6 +142,16 @@ class Event:
     snapshot_path: str | None = None
     clip_path: str | None = None
     notified: bool = False
+    # Inventario de lo demás que se veía en el frame del evento (Fase 7).
+    # Vacío si la anotación de escena está desactivada o si su pasada falló.
+    scene: tuple[SceneObject, ...] = ()
+    # Resolución del frame analizado: sin ella las cajas en píxeles no se
+    # pueden normalizar y el análisis queda atado a la cámara que las produjo.
+    frame_width: int | None = None
+    frame_height: int | None = None
+    # Captura sin cajas dibujadas, para poder reprocesar el histórico con un
+    # modelo mejor más adelante.
+    snapshot_raw_path: str | None = None
 
     @staticmethod
     def new(camera_id: UUID, detections: tuple[Detection, ...]) -> Event:

@@ -10,10 +10,20 @@ from pathlib import Path
 import numpy as np
 from sqlalchemy.orm import Session, sessionmaker
 
-from secuh.core.models import CameraState, Detection, Notification
-from secuh.core.ports import Frame, Notifier, PersonDetector, VideoSource
+from secuh.core.models import CameraState, Detection, Notification, SceneObject
+from secuh.core.ports import (
+    Frame,
+    Notifier,
+    PersonDetector,
+    SceneInspector,
+    VideoSource,
+)
 from secuh.db.models import CameraRow
-from secuh.runtime.supervisor import CameraSupervisor
+from secuh.runtime.supervisor import (
+    CameraSupervisor,
+    ThreadSafeDetector,
+    ThreadSafeSceneInspector,
+)
 from secuh.settings import ServerSettings
 
 
@@ -45,6 +55,11 @@ class CrashingSource(VideoSource):
 
 class FakeDetector(PersonDetector):
     def detect(self, frame: Frame) -> list[Detection]:
+        return []
+
+
+class FakeSceneInspector(SceneInspector):
+    def inspect(self, frame: Frame) -> list[SceneObject]:
         return []
 
 
@@ -217,3 +232,86 @@ class TestReconciliation:
             assert supervisor._running[row.id].camera.confidence_threshold == 0.9
         finally:
             supervisor.stop()
+
+
+class TestMotorCompartido:
+    """El detector y el inspector de escena comparten modelo y lock.
+
+    Dos locks distintos sobre el mismo objeto YOLO permitirían dos hilos dentro
+    del modelo a la vez, que es justo lo que ``ThreadSafeDetector`` evita.
+    """
+
+    def _supervisor(
+        self, session_factory: sessionmaker[Session], tmp_path: Path
+    ) -> CameraSupervisor:
+        settings = ServerSettings(
+            database_url="sqlite://", data_dir=tmp_path / "data", supervisor_poll_seconds=0.1
+        )
+        return CameraSupervisor(
+            session_factory=session_factory,
+            settings=settings,
+            notifiers=[],
+            detector_factory=FakeDetector,
+            source_factory=lambda camera: FakeSource(),
+            scene_inspector_factory=lambda detector: FakeSceneInspector(),
+        )
+
+    def test_detector_e_inspector_comparten_el_mismo_lock(
+        self, session_factory: sessionmaker[Session], tmp_path: Path
+    ) -> None:
+        supervisor = self._supervisor(session_factory, tmp_path)
+
+        detector = supervisor._get_detector()
+        inspector = supervisor._get_scene_inspector()
+
+        assert isinstance(detector, ThreadSafeDetector)
+        assert isinstance(inspector, ThreadSafeSceneInspector)
+        assert inspector._lock is detector.lock
+
+    def test_el_modelo_se_construye_una_sola_vez(
+        self, session_factory: sessionmaker[Session], tmp_path: Path
+    ) -> None:
+        supervisor = self._supervisor(session_factory, tmp_path)
+
+        first = supervisor._get_detector()
+        supervisor._get_scene_inspector()
+
+        assert supervisor._get_detector() is first
+
+    def test_sin_deteccion_yolo_no_hay_inspector(
+        self, session_factory: sessionmaker[Session], tmp_path: Path
+    ) -> None:
+        # La fábrica por defecto solo sabe compartir el modelo de un detector
+        # YOLO real; con un fake devuelve None en vez de cargar un segundo modelo.
+        settings = ServerSettings(
+            database_url="sqlite://", data_dir=tmp_path / "data", supervisor_poll_seconds=0.1
+        )
+        supervisor = CameraSupervisor(
+            session_factory=session_factory,
+            settings=settings,
+            notifiers=[],
+            detector_factory=FakeDetector,
+            source_factory=lambda camera: FakeSource(),
+        )
+
+        assert supervisor._get_scene_inspector() is None
+
+    def test_la_anotacion_se_puede_apagar(
+        self, session_factory: sessionmaker[Session], tmp_path: Path
+    ) -> None:
+        settings = ServerSettings(
+            database_url="sqlite://",
+            data_dir=tmp_path / "data",
+            supervisor_poll_seconds=0.1,
+            scene_annotation=False,
+        )
+        supervisor = CameraSupervisor(
+            session_factory=session_factory,
+            settings=settings,
+            notifiers=[],
+            detector_factory=FakeDetector,
+            source_factory=lambda camera: FakeSource(),
+            scene_inspector_factory=lambda detector: FakeSceneInspector(),
+        )
+
+        assert supervisor._get_scene_inspector() is None

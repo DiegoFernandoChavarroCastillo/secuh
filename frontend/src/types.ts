@@ -67,6 +67,12 @@ export interface EventItem {
   notified: boolean;
   has_snapshot: boolean;
   has_clip: boolean;
+  /**
+   * Qué más se veía en la escena, por clase. Las claves son etiquetas COCO en
+   * inglés — identificadores estables del dataset; la traducción al español es
+   * cosa de la interfaz (ver `objectLabels`).
+   */
+  object_counts: Record<string, number>;
 }
 
 export interface EventPage {

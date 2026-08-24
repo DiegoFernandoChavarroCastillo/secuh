@@ -2,6 +2,11 @@
 
 > Documento complementario a `proyecto-deteccion-personas.md`. Define **cómo** se construye el proyecto: fases, arquitectura de código, prácticas, seguridad y criterios de salida de cada etapa.
 
+> **Estado (2026-08-18, v0.7.0):** fases 0–6 cerradas, más la **Fase 7**
+> (anotación de escena y datos para análisis), cuyo plan detallado y estado de
+> verificación viven en [`plan-fase-7-anotacion-de-escena.md`](plan-fase-7-anotacion-de-escena.md).
+> Lo de abajo describe el estado al cierre de la 0.6.2 y sigue vigente:
+>
 > **Estado (2026-08-13, v0.6.2):** fases 0–6 implementadas y verificadas, incluyendo
 > `docker compose up` con PostgreSQL real y hardware físico (celular IP Webcam + cámara
 > RTSP). Se encontró y corrigió una serie de bugs reales de la puesta en marcha (ver
@@ -263,6 +268,7 @@ Frontend:
 | 4 | Multi-canal (ntfy + Telegram) | 1–2 sem | ✅ hecha, validada con ntfy real (recordar asignar el canal a la cámara) |
 | 5 | Escala y robustez | 3–4 sem | ✅ hecha con alcance del ADR 0004 (cola/tracking diferidos; resistencia 72 h pendiente en sitio) |
 | 6 | Producto | 2–3 sem | ✅ hecha; `run.py` (ADR 0005) como alternativa nativa en Windows; documentación de instalación cerrada en 0.6.2; falta decisión de modelo de soporte |
+| 7 | Anotación de escena y datos para análisis | 2 sem | ✅ hecha en 0.7.0 (plan y verificación en [`plan-fase-7-anotacion-de-escena.md`](plan-fase-7-anotacion-de-escena.md)); falta la prueba de campo con cámara real |
 
 ---
 

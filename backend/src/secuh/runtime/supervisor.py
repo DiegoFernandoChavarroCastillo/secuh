@@ -30,16 +30,27 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from secuh.core.clock import MonotonicClock
 from secuh.core.handler import EventHandler
-from secuh.core.models import Camera, CameraState, Detection, Notification
+from secuh.core.models import Camera, CameraState, Detection, Notification, SceneObject
 from secuh.core.pipeline import CooldownGate, DetectionPipeline
-from secuh.core.ports import Frame, Notifier, PersonDetector, VideoSource
+from secuh.core.ports import (
+    Frame,
+    Notifier,
+    PersonDetector,
+    SceneInspector,
+    SnapshotStore,
+    VideoSource,
+)
 from secuh.db.event_store import DbEventStore
 from secuh.db.models import CameraRow
 from secuh.detection.motion import Mog2MotionDetector
 from secuh.notifications.factory import ChannelConfigError, build_notifier
 from secuh.settings import ServerSettings
 from secuh.storage.clips import FileClipRecorder
-from secuh.storage.snapshots import FileSnapshotStore
+from secuh.storage.snapshots import (
+    AnnotatedSnapshotStore,
+    FileRawSnapshotStore,
+    FileSnapshotStore,
+)
 from secuh.video.source import OpenCvVideoSource, grab_single_frame
 from secuh.video.worker import CameraWorker
 
@@ -49,13 +60,36 @@ logger = logging.getLogger(__name__)
 class ThreadSafeDetector(PersonDetector):
     """Serializa las inferencias de un detector compartido entre hilos."""
 
-    def __init__(self, inner: PersonDetector) -> None:
+    def __init__(self, inner: PersonDetector, lock: threading.Lock | None = None) -> None:
         self._inner = inner
-        self._lock = threading.Lock()
+        self._lock = lock or threading.Lock()
+
+    @property
+    def lock(self) -> threading.Lock:
+        """El lock que serializa el modelo, para compartirlo con el inspector."""
+        return self._lock
 
     def detect(self, frame: Frame) -> list[Detection]:
         with self._lock:
             return self._inner.detect(frame)
+
+
+class ThreadSafeSceneInspector(SceneInspector):
+    """Inspector de escena serializado por el **mismo** lock que el detector.
+
+    Compartir el lock no es una precaución de más: detector e inspector operan
+    sobre el mismo objeto ``YOLO``, así que dos locks distintos permitirían dos
+    hilos dentro del modelo a la vez — exactamente lo que ``ThreadSafeDetector``
+    existe para impedir.
+    """
+
+    def __init__(self, inner: SceneInspector, lock: threading.Lock) -> None:
+        self._inner = inner
+        self._lock = lock
+
+    def inspect(self, frame: Frame) -> list[SceneObject]:
+        with self._lock:
+            return self._inner.inspect(frame)
 
 
 @dataclass
@@ -98,6 +132,7 @@ class CameraSupervisor:
         notifiers: list[Notifier],
         detector_factory: Callable[[], PersonDetector] | None = None,
         source_factory: Callable[[Camera], VideoSource] | None = None,
+        scene_inspector_factory: Callable[[PersonDetector], SceneInspector | None] | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._settings = settings
@@ -106,7 +141,11 @@ class CameraSupervisor:
         self._source_factory = source_factory or (
             lambda camera: OpenCvVideoSource(camera.source_url)
         )
-        self._detector: PersonDetector | None = None
+        self._scene_inspector_factory = (
+            scene_inspector_factory or self._default_scene_inspector_factory
+        )
+        self._detector: ThreadSafeDetector | None = None
+        self._scene_inspector: SceneInspector | None = None
         self._running: dict[UUID, _Running] = {}
         self._analysis_fps: dict[UUID, float] = {}
         self._channel_signature: dict[UUID, tuple[object, ...]] = {}
@@ -263,6 +302,20 @@ class CameraSupervisor:
                 )
         return notifiers or list(self._notifiers)
 
+    def _build_snapshot_store(self, camera: Camera) -> SnapshotStore:
+        """Captura anotada si la escena está activa; si no, la de siempre."""
+        settings = self._settings
+        store: SnapshotStore = FileSnapshotStore(
+            base_dir=settings.data_dir, camera_name=camera.name
+        )
+        if not settings.scene_annotation:
+            return store
+        return AnnotatedSnapshotStore(
+            store,
+            min_confidence=settings.scene_draw_min_confidence,
+            labels=settings.scene_draw_labels or None,
+        )
+
     def _start_worker(self, entry: _Desired) -> None:
         camera = entry.camera
         analysis_fps = entry.analysis_fps
@@ -289,10 +342,16 @@ class CameraSupervisor:
         )
         handler = EventHandler(
             camera=camera,
-            snapshots=FileSnapshotStore(base_dir=settings.data_dir, camera_name=camera.name),
+            snapshots=self._build_snapshot_store(camera),
             clips=recorder,
             notifiers=notifiers,
             events=DbEventStore(self._session_factory),
+            scene_inspector=self._get_scene_inspector(),
+            raw_snapshots=(
+                FileRawSnapshotStore(base_dir=settings.data_dir, camera_name=camera.name)
+                if settings.keep_raw_snapshot
+                else None
+            ),
         )
         worker = CameraWorker(
             camera=camera,
@@ -323,11 +382,42 @@ class CameraSupervisor:
 
     # ------------------------------------------------------------- detector
     def _get_detector(self) -> PersonDetector:
-        if self._detector is None:
-            self._detector = ThreadSafeDetector(self._detector_factory())
+        self._ensure_engine()
+        assert self._detector is not None
         return self._detector
+
+    def _get_scene_inspector(self) -> SceneInspector | None:
+        self._ensure_engine()
+        return self._scene_inspector
+
+    def _ensure_engine(self) -> None:
+        """Carga el modelo una sola vez y monta detector e inspector sobre él."""
+        if self._detector is not None:
+            return
+        inner = self._detector_factory()
+        detector = ThreadSafeDetector(inner)
+        self._detector = detector
+        if self._settings.scene_annotation:
+            inspector = self._scene_inspector_factory(inner)
+            if inspector is not None:
+                # Mismo lock que el detector: comparten el objeto YOLO.
+                self._scene_inspector = ThreadSafeSceneInspector(inspector, detector.lock)
 
     def _default_detector_factory(self) -> PersonDetector:
         from secuh.detection.yolo import YoloPersonDetector
 
         return YoloPersonDetector(model_path=self._settings.model, imgsz=self._settings.imgsz)
+
+    def _default_scene_inspector_factory(self, detector: PersonDetector) -> SceneInspector | None:
+        """Inspector sobre el modelo del detector, si es un detector YOLO.
+
+        Devuelve ``None`` con cualquier otro detector (los fakes de los tests,
+        por ejemplo): sin un modelo que compartir no hay escena que inspeccionar.
+        """
+        from secuh.detection.yolo import YoloPersonDetector, YoloSceneInspector
+
+        if not isinstance(detector, YoloPersonDetector):
+            return None
+        return YoloSceneInspector.sharing_model_with(
+            detector, min_confidence=self._settings.scene_min_confidence
+        )

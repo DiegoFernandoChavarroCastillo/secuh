@@ -1,6 +1,7 @@
 """Manejo de un evento confirmado: evidencia, notificación y persistencia.
 
-El orden importa: primero la captura (rápida, va adjunta a la notificación),
+El orden importa: primero la anotación de escena (que la captura necesita para
+dibujar las cajas), luego la captura (rápida, va adjunta a la notificación),
 luego la notificación (la razón de ser del sistema: debe salir en segundos),
 después el clip (tarda ``post_seconds`` en completarse) y al final el registro
 del evento. Un fallo en un paso se loggea y no impide los siguientes.
@@ -19,6 +20,8 @@ from secuh.core.ports import (
     Frame,
     NotificationError,
     Notifier,
+    RawSnapshotStore,
+    SceneInspector,
     SnapshotStore,
 )
 
@@ -33,14 +36,24 @@ class EventHandler:
         clips: ClipRecorder,
         notifiers: Sequence[Notifier],
         events: EventStore,
+        scene_inspector: SceneInspector | None = None,
+        raw_snapshots: RawSnapshotStore | None = None,
     ) -> None:
         self._camera = camera
         self._snapshots = snapshots
         self._clips = clips
         self._notifiers = notifiers
         self._events = events
+        # Ambos opcionales a propósito: sin ellos, el manejo del evento es
+        # exactamente el de antes de la Fase 7.
+        self._scene_inspector = scene_inspector
+        self._raw_snapshots = raw_snapshots
 
     def handle(self, event: Event, frame: Frame) -> Event:
+        event = self._describe_scene(event, frame)
+
+        raw_snapshot_path = self._save_raw_snapshot(event, frame)
+
         snapshot_path: str | None = None
         try:
             snapshot_path = self._snapshots.save(event, frame)
@@ -55,12 +68,50 @@ class EventHandler:
         except Exception:
             logger.exception("No se pudo grabar el clip", extra={"event_id": str(event.id)})
 
-        event = replace(event, snapshot_path=snapshot_path, clip_path=clip_path, notified=notified)
+        event = replace(
+            event,
+            snapshot_path=snapshot_path,
+            snapshot_raw_path=raw_snapshot_path,
+            clip_path=clip_path,
+            notified=notified,
+        )
         try:
             self._events.save(event)
         except Exception:
             logger.exception("No se pudo persistir el evento", extra={"event_id": str(event.id)})
         return event
+
+    def _describe_scene(self, event: Event, frame: Frame) -> Event:
+        """Anota qué más había en la escena. Nunca puede tumbar el evento.
+
+        Registrar el contexto es deseable; notificar es obligatorio. Si la
+        inferencia de escena falla, el evento sigue su curso con ``scene``
+        vacío y la captura sale sin cajas.
+        """
+        height, width = int(frame.shape[0]), int(frame.shape[1])
+        event = replace(event, frame_width=width, frame_height=height)
+        if self._scene_inspector is None:
+            return event
+        try:
+            scene = tuple(self._scene_inspector.inspect(frame))
+        except Exception:
+            logger.exception(
+                "No se pudo describir la escena; el evento continúa sin anotar",
+                extra={"event_id": str(event.id)},
+            )
+            return event
+        return replace(event, scene=scene)
+
+    def _save_raw_snapshot(self, event: Event, frame: Frame) -> str | None:
+        if self._raw_snapshots is None:
+            return None
+        try:
+            return self._raw_snapshots.save_raw(event, frame)
+        except Exception:
+            logger.exception(
+                "No se pudo guardar la captura cruda", extra={"event_id": str(event.id)}
+            )
+            return None
 
     def _notify(self, event: Event, snapshot_path: str | None) -> bool:
         notification = self._build_notification(event, snapshot_path)

@@ -9,14 +9,15 @@
 El paquete `backend/src/secuh/core/` contiene el dominio puro:
 
 - `models.py` — entidades inmutables: `Camera` (con `Schedule` y zona),
-  `Event`, `Detection`, `Notification`.
+  `Event`, `Detection`, `SceneObject`, `Notification`.
 - `ports.py` — interfaces que el dominio necesita del mundo exterior:
-  `VideoSource`, `MotionDetector`, `PersonDetector`, `Notifier`, `EventStore`,
-  `SnapshotStore`, `ClipRecorder`, `Clock`.
+  `VideoSource`, `MotionDetector`, `PersonDetector`, `SceneInspector`,
+  `Notifier`, `EventStore`, `SnapshotStore`, `RawSnapshotStore`,
+  `ClipRecorder`, `Clock`.
 - `pipeline.py` — orquestación por frame: horario activo → movimiento →
   detección → umbral de confianza → zona → cooldown → evento.
-- `handler.py` — qué hacer con un evento: captura → notificar → clip →
-  persistir, tolerando fallos parciales en cada paso.
+- `handler.py` — qué hacer con un evento: describir la escena → captura →
+  notificar → clip → persistir, tolerando fallos parciales en cada paso.
 - `geometry.py` — punto-en-polígono para las zonas (sin OpenCV).
 
 **Regla:** `core/` no importa OpenCV, Ultralytics, FastAPI ni SQLAlchemy.
@@ -33,17 +34,44 @@ OpenCvVideoSource ──frames──▶ CameraWorker  (hilo por cámara; métric
                                      horario activo → movimiento (MOG2, enmascarado a la zona)
                                      → YOLO person → umbral → centro-en-zona → cooldown
                                      └─ Event ─▶ EventHandler
-                                                  1. FileSnapshotStore (JPEG)
-                                                  2. Notifier(s) — canales de la cámara
+                                                  1. SceneInspector (YOLO sin filtro de clases)
+                                                  2. FileRawSnapshotStore (JPEG sin cajas)
+                                                  3. AnnotatedSnapshotStore (JPEG con cajas)
+                                                  4. Notifier(s) — canales de la cámara
                                                      (ntfy / Telegram) o el global
-                                                  3. FileClipRecorder.record_event (pre+post)
-                                                  4. EventStore (BD; JSONL en modo standalone)
+                                                  5. FileClipRecorder.record_event (pre+post)
+                                                  6. EventStore (BD + event_objects;
+                                                     JSONL en modo standalone)
 RetentionJob (hilo de fondo): borra evidencia > N días
 ```
 
 Decisión de resiliencia: cada paso del handler tolera el fallo de los demás
 (sin captura se notifica sin imagen; sin canal disponible el evento igual se
-persiste con `notified: false`).
+persiste con `notified: false`; **si la inspección de escena falla, el evento
+sigue su curso sin anotar y la notificación sale igual**).
+
+### Anotación de escena (Fase 7)
+
+El paso 1 es una **segunda inferencia**, esta vez sin filtro de clases, sobre
+el frame del evento. Registra todo lo que se veía —mascota, bolso, auto, moto—
+como contexto de un evento que el pipeline ya confirmó.
+
+Tres cosas que no son obvias y conviene no romper:
+
+- **No participa en la decisión.** Corre después del pipeline, así que qué
+  dispara un evento y a quién se notifica sigue siendo exclusivamente personas.
+  `pipeline.py` no sabe que esto existe.
+- **Comparte modelo y lock con el detector.** `YoloSceneInspector` recibe el
+  `YOLO` ya cargado (un modelo por proceso, por RAM) y el supervisor lo envuelve
+  con **el mismo lock** que `ThreadSafeDetector`. Dos locks distintos sobre el
+  mismo modelo dejarían entrar dos hilos a la vez, que es justo lo que ese lock
+  evita.
+- **Cuesta una inferencia por evento, no por frame.** ~250 ms dentro de un
+  handler que ya bloquea `clip_post_seconds` grabando el clip.
+
+El dibujo (`storage/annotate.py`) **copia el frame antes de pintar**: el mismo
+arreglo está en el buffer circular del clip y en `CameraWorker.last_frame`, así
+que dibujar sobre él dejaría cajas quemadas en el vídeo y en el preview.
 
 ## Modo servidor
 
@@ -90,6 +118,13 @@ FastAPI (api/)                         CameraSupervisor (runtime/)
   la API y de los logs.
 - Retención automática de evidencia (`RetentionJob`) como práctica de
   privacidad; obligaciones de campo en `runbook.md` §7.
+- La exportación del histórico exige sesión como cualquier otra evidencia, y
+  neutraliza la inyección de fórmulas en el CSV: los nombres y zonas de cámara
+  los escribe un usuario, y un nombre como `=WEBSERVICE(...)` se ejecutaría al
+  abrir el archivo descargado en Excel. Se escapa al exportar, no al guardar.
+- Los registros de `event_objects` **sobreviven a la retención de imágenes**:
+  a los N días desaparece la foto y queda la fila. Es deliberado (es lo que
+  hace posible el análisis) y está declarado en `runbook.md` §8.1.
 
 ## Estado por fase
 
@@ -111,7 +146,13 @@ FastAPI (api/)                         CameraSupervisor (runtime/)
   métricas por worker; cola de inferencia y ByteTrack diferidos.
 - **Fase 6 (hecha):** imagen única con panel empaquetado, runbook, guía de
   IP Webcam, checklist de instalación, changelog y versionado.
+- **Fase 7 (hecha, pendiente de prueba de campo):** anotación de escena
+  (`SceneInspector`, tabla `event_objects`, migración `0004`), capturas con
+  cajas dibujadas, captura cruda, exportación a CSV/Parquet y
+  [`analisis-de-datos.md`](analisis-de-datos.md). Plan y desviaciones en
+  [`plan-fase-7-anotacion-de-escena.md`](../plan-fase-7-anotacion-de-escena.md).
 
 Pendientes que no son de código y quedan para la instalación real: la prueba
-de resistencia de 72 h (procedimiento en `runbook.md` §6) y la decisión de
-negocio sobre el modelo de soporte.
+de resistencia de 72 h (procedimiento en `runbook.md` §6), la decisión de
+negocio sobre el modelo de soporte, y la prueba de campo de la Fase 7 (ponerse
+delante de la webcam con algo en la mano y mirar la foto que llega).

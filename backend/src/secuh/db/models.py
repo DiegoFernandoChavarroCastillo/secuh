@@ -45,6 +45,12 @@ def utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+#: Etiqueta de las filas ``trigger``: el pipeline solo dispara con personas, y
+#: se guarda con el mismo nombre COCO que usa el barrido de escena para que las
+#: dos fuentes sean comparables en el análisis.
+TRIGGER_LABEL = "person"
+
+
 class UserRow(Base):
     __tablename__ = "users"
 
@@ -162,8 +168,20 @@ class EventRow(Base):
     snapshot_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     clip_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     notified: Mapped[bool] = mapped_column(default=False)
+    # Captura sin cajas dibujadas (Fase 7). Nullable: los eventos anteriores a
+    # la migración 0004 no la tienen, y con la opción desactivada tampoco.
+    snapshot_raw_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # Resolución del frame analizado, para poder normalizar las cajas al
+    # analizar sin depender de la cámara que las produjo.
+    frame_width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    frame_height: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     camera: Mapped[CameraRow] = relationship(back_populates="events")
+    # Mismo motivo que en CameraRow.events: sin delete-orphan, borrar un evento
+    # dejaría filas hijas apuntando a la nada.
+    objects: Mapped[list[EventObjectRow]] = relationship(
+        back_populates="event", cascade="all, delete-orphan"
+    )
 
     @staticmethod
     def from_domain(event: Event) -> EventRow:
@@ -174,9 +192,85 @@ class EventRow(Base):
             confidence=event.max_confidence,
             person_count=len(event.detections),
             snapshot_path=event.snapshot_path,
+            snapshot_raw_path=event.snapshot_raw_path,
             clip_path=event.clip_path,
             notified=event.notified,
+            frame_width=event.frame_width,
+            frame_height=event.frame_height,
+            objects=EventObjectRow.all_from_domain(event),
         )
 
 
-__all__ = ["Base", "CameraRow", "Detection", "EventRow", "UserRow", "utcnow"]
+class EventObjectRow(Base):
+    """Un objeto observado en un evento. Formato largo: una fila por objeto.
+
+    Es la tabla pensada para análisis, y por eso se guarda cruda: etiquetas COCO
+    en inglés (identificador estable del dataset, no texto de interfaz) y cajas
+    en píxeles. Lo derivable —coordenadas normalizadas, área, hora local— se
+    calcula al exportar, no aquí: una columna derivada en base de datos es una
+    columna que algún día se desincroniza.
+    """
+
+    __tablename__ = "event_objects"
+
+    #: Objetos del barrido de escena, que **incluye personas otra vez**.
+    SOURCE_SCENE = "scene"
+    #: Las personas que dispararon el evento, tal como las vio el pipeline.
+    SOURCE_TRIGGER = "trigger"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    event_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("events.id", ondelete="CASCADE"), index=True
+    )
+    # Nunca sumes las dos fuentes o contarás personas dos veces: para contar
+    # objetos usa "scene"; para auditar por qué sonó el teléfono, "trigger".
+    source: Mapped[str] = mapped_column(String(8))
+    label: Mapped[str] = mapped_column(String(32), index=True)
+    confidence: Mapped[float] = mapped_column(Float)
+    x1: Mapped[int] = mapped_column(Integer)
+    y1: Mapped[int] = mapped_column(Integer)
+    x2: Mapped[int] = mapped_column(Integer)
+    y2: Mapped[int] = mapped_column(Integer)
+
+    event: Mapped[EventRow] = relationship(back_populates="objects")
+
+    @staticmethod
+    def all_from_domain(event: Event) -> list[EventObjectRow]:
+        rows = [
+            EventObjectRow(
+                event_id=event.id,
+                source=EventObjectRow.SOURCE_TRIGGER,
+                label=TRIGGER_LABEL,
+                confidence=detection.confidence,
+                x1=detection.box.x1,
+                y1=detection.box.y1,
+                x2=detection.box.x2,
+                y2=detection.box.y2,
+            )
+            for detection in event.detections
+        ]
+        rows += [
+            EventObjectRow(
+                event_id=event.id,
+                source=EventObjectRow.SOURCE_SCENE,
+                label=scene_object.label,
+                confidence=scene_object.confidence,
+                x1=scene_object.box.x1,
+                y1=scene_object.box.y1,
+                x2=scene_object.box.x2,
+                y2=scene_object.box.y2,
+            )
+            for scene_object in event.scene
+        ]
+        return rows
+
+
+__all__ = [
+    "Base",
+    "CameraRow",
+    "Detection",
+    "EventObjectRow",
+    "EventRow",
+    "UserRow",
+    "utcnow",
+]

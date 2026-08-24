@@ -2,18 +2,25 @@
 
 Sistema de videovigilancia inteligente que procesa video en tiempo real (cámaras IP RTSP, celular vía IP Webcam, o webcam USB), detecta específicamente **personas** (no animales ni mascotas), y envía notificaciones inmediatas con foto al teléfono del dueño — mientras está ocurriendo, no después.
 
-**Estado:** v0.6.2 — fases 0–6 del plan implementadas ([`CHANGELOG.md`](CHANGELOG.md)).
-Quedan dos pendientes que no son de código: la prueba de resistencia de 72 h en
-el hardware donde se instale, y la decisión sobre el modelo de soporte.
+**Estado:** v0.7.0 — fases 0–6 del plan implementadas, más la anotación de
+escena de la Fase 7 ([`CHANGELOG.md`](CHANGELOG.md)). Quedan dos pendientes que
+no son de código: la prueba de resistencia de 72 h en el hardware donde se
+instale, y la decisión sobre el modelo de soporte.
 
 | Qué hace | Cómo |
 |---|---|
 | Detección eficiente | Pre-filtro de movimiento (MOG2) → YOLOv8n solo clase persona → anti-spam por cooldown |
 | Alertas al teléfono | Canales ntfy y Telegram, configurables por cámara desde el panel, con botón de prueba |
-| Evidencia | Captura JPEG + clip mp4 (pre/post evento); retención automática configurable |
+| Evidencia | Captura JPEG con las cajas dibujadas + clip mp4 (pre/post evento); retención automática |
+| Contexto de la escena | Al detectar a alguien, registra también mascotas, bolsos, autos y motos que se vieran |
+| Datos para analizar | Histórico exportable a CSV/Parquet, listo para pandas ([guía](docs/analisis-de-datos.md)) |
 | Panel web | Login, cámaras (armar/desarmar en caliente), feed de eventos, estado en vivo (SSE) |
 | Afinado por cámara | Sensibilidad, horario de vigilancia (incl. nocturno) y zona de detección dibujable |
 | Operación | Alerta si una cámara pierde señal; reconexión y reinicio de workers automáticos |
+
+> La anotación de escena **no cambia qué dispara una alerta**: se notifica por
+> personas y solo por personas, igual que antes. Lo demás se registra como
+> contexto y se dibuja en la foto.
 
 ## Documentación
 
@@ -21,6 +28,7 @@ el hardware donde se instale, y la decisión sobre el modelo de soporte.
 - [`plan-de-desarrollo.md`](plan-de-desarrollo.md) — plan por fases con su estado
 - [`docs/architecture.md`](docs/architecture.md) — arquitectura (hexagonal) y flujo en ejecución
 - [`docs/adr/`](docs/adr/README.md) — decisiones de arquitectura registradas
+- [`docs/analisis-de-datos.md`](docs/analisis-de-datos.md) — formato del histórico y recetas de pandas
 - Operación: [runbook](docs/runbook.md) · [guía IP Webcam](docs/guia-ip-webcam.md) · [checklist de instalación](docs/checklist-instalacion.md)
 
 ## Ejecutar el producto
@@ -107,12 +115,13 @@ backend/
     detection/      MOG2 (con máscara de zona) y YOLO
     video/          Captura con reconexión + worker por cámara (métricas, último frame)
     notifications/  ntfy, Telegram, consola + fábrica de canales
-    storage/        Clips (buffer circular), snapshots, retención
-    db/             SQLAlchemy (users, cameras, events, channels) + event store
+    storage/        Clips (buffer circular), snapshots, dibujo de cajas, retención
+    db/             SQLAlchemy (users, cameras, events, objetos, canales) + event store + export
     api/            FastAPI: auth, cámaras, canales, eventos, SSE; sirve el panel en /
     runtime/        Supervisor: reconcilia BD <-> workers (armado en caliente)
-  migrations/       Alembic (0001-0003)
-  tests/unit/       89 tests con fakes (sin hardware)
+  migrations/       Alembic (0001-0004)
+  scripts/          export_dataset.py: histórico a CSV/Parquet
+  tests/unit/       129 tests con fakes (sin hardware)
 frontend/           Panel React + Vite + TS (login, cámaras, eventos, canales, editor de zona)
 deploy/             docker-compose + Dockerfile multi-stage (panel empaquetado)
 spike/              Benchmark descartable de Fase 0

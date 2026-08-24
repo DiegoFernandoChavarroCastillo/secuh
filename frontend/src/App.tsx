@@ -36,9 +36,7 @@ function Shell() {
     <div className="shell">
       <header className="topbar">
         <span className="brand">
-          secuh<span className="brand-dot" aria-hidden="true">
-            ·
-          </span>
+          secuh<span className="brand-dot" aria-hidden="true" />
         </span>
         <nav className="nav" aria-label="Secciones">
           <NavLink to="/" end>

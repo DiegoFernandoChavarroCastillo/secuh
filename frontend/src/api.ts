@@ -76,12 +76,16 @@ export const api = {
   },
 
   events: {
-    list: (page: number, cameraId?: string) => {
+    list: (page: number, cameraId?: string, label?: string) => {
       const params = new URLSearchParams({ page: String(page), page_size: "20" });
       if (cameraId) params.set("camera_id", cameraId);
+      if (label) params.set("label", label);
       return request<EventPage>(`/events?${params}`);
     },
     snapshotUrl: (id: string) => `/api/events/${id}/snapshot`,
+    rawSnapshotUrl: (id: string) => `/api/events/${id}/snapshot/raw`,
     clipUrl: (id: string) => `/api/events/${id}/clip`,
+    objectsCsvUrl: (label?: string) =>
+      `/api/events/objects.csv${label ? `?label=${encodeURIComponent(label)}` : ""}`,
   },
 };

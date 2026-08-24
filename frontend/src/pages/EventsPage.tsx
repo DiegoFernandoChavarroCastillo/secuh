@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError } from "../api";
+import { describeCount, describeLabel, sortLabels } from "../objectLabels";
 import type { EventPage } from "../types";
 import { useStream, type StreamStatus } from "../useStream";
 
@@ -16,17 +17,18 @@ function formatTime(iso: string): { time: string; date: string } {
 
 export function EventsPage() {
   const [page, setPage] = useState(1);
+  const [label, setLabel] = useState<string>("");
   const [data, setData] = useState<EventPage | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
-      setData(await api.events.list(page));
+      setData(await api.events.list(page, undefined, label || undefined));
       setError(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Sin conexión con el sistema");
     }
-  }, [page]);
+  }, [page, label]);
 
   useEffect(() => {
     void refresh();
@@ -48,11 +50,50 @@ export function EventsPage() {
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.page_size)) : 1;
 
+  // Clases presentes en la página actual, para poblar el filtro. Se toma de lo
+  // que hay a la vista en vez de pedir el catálogo entero: si el filtro está
+  // puesto, la opción activa se conserva aparte para poder quitarlo.
+  const availableLabels = useMemo(() => {
+    const found = new Set<string>();
+    for (const event of data?.items ?? []) {
+      for (const key of Object.keys(event.object_counts)) found.add(key);
+    }
+    if (label) found.add(label);
+    return sortLabels([...found]);
+  }, [data, label]);
+
   return (
     <>
       <div className="page-head">
         <h1>Eventos</h1>
         {data && <span className="page-count mono">{data.total} registrados</span>}
+      </div>
+
+      <div className="event-tools">
+        <label className="event-filter">
+          <span>Filtrar por objeto</span>
+          <select
+            value={label}
+            onChange={(e) => {
+              setLabel(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="">Todos</option>
+            {availableLabels.map((key) => (
+              <option key={key} value={key}>
+                {describeLabel(key)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <a
+          className="btn btn-outline btn-sm"
+          href={api.events.objectsCsvUrl(label || undefined)}
+          download
+        >
+          Descargar CSV
+        </a>
       </div>
 
       {error && (
@@ -105,6 +146,15 @@ export function EventsPage() {
                   {date} {time} · confianza {Math.round(event.confidence * 100)}%
                   {!event.notified && " · sin notificar"}
                 </p>
+                {Object.keys(event.object_counts).length > 0 && (
+                  <ul className="event-objects" aria-label="También en la escena">
+                    {sortLabels(Object.keys(event.object_counts)).map((key) => (
+                      <li key={key} className="object-chip">
+                        {describeCount(key, event.object_counts[key])}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
 
               {event.has_clip && (

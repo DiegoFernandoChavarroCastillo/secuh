@@ -90,6 +90,17 @@ class CameraOut(BaseModel):
     metrics: dict[str, float | int] | None = None
 
 
+class SceneObjectOut(BaseModel):
+    """Un objeto observado en la escena de un evento."""
+
+    label: str
+    confidence: float
+    x1: int
+    y1: int
+    x2: int
+    y2: int
+
+
 class EventOut(BaseModel):
     id: UUID
     camera_id: UUID
@@ -100,6 +111,17 @@ class EventOut(BaseModel):
     notified: bool
     has_snapshot: bool
     has_clip: bool
+    # Conteo por clase de lo que se veía en la escena, para las etiquetas del
+    # feed. El detalle con cajas va en GET /api/events/{id}, que es donde hace
+    # falta: mandarlo en cada página del listado sería peso muerto.
+    object_counts: dict[str, int] = {}
+
+
+class EventDetailOut(EventOut):
+    objects: list[SceneObjectOut] = []
+    frame_width: int | None = None
+    frame_height: int | None = None
+    has_raw_snapshot: bool = False
 
 
 class EventPage(BaseModel):

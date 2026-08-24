@@ -16,7 +16,7 @@ from collections.abc import Iterator
 import numpy as np
 import numpy.typing as npt
 
-from secuh.core.models import Detection, Event, Notification
+from secuh.core.models import Detection, Event, Notification, SceneObject
 
 type Frame = npt.NDArray[np.uint8]
 
@@ -50,6 +50,20 @@ class PersonDetector(ABC):
         el umbral por cámara lo aplica el pipeline."""
 
 
+class SceneInspector(ABC):
+    """Inventario de todo lo detectable en un frame. Solo observa.
+
+    Se invoca una vez por evento ya confirmado, nunca dentro del bucle de
+    vigilancia: no participa en la decisión de disparar (eso es exclusivo de
+    ``PersonDetector`` y el pipeline), solo describe la escena en la que
+    ocurrió.
+    """
+
+    @abstractmethod
+    def inspect(self, frame: Frame) -> list[SceneObject]:
+        """Devuelve los objetos visibles en el frame, de cualquier clase."""
+
+
 class Notifier(ABC):
     """Canal de salida de notificaciones (ntfy, Telegram, correo...)."""
 
@@ -72,6 +86,20 @@ class SnapshotStore(ABC):
     @abstractmethod
     def save(self, event: Event, frame: Frame) -> str:
         """Guarda la captura y devuelve su ruta."""
+
+
+class RawSnapshotStore(ABC):
+    """Persistencia de la captura *sin* cajas dibujadas (opcional).
+
+    Es un puerto aparte y no un método más de ``SnapshotStore`` porque es una
+    capacidad opcional: guardar el original permite reprocesar el histórico con
+    un modelo mejor en el futuro, pero cuesta duplicar el espacio de capturas y
+    hay instalaciones donde no compensa.
+    """
+
+    @abstractmethod
+    def save_raw(self, event: Event, frame: Frame) -> str:
+        """Guarda el frame original y devuelve su ruta."""
 
 
 class ClipRecorder(ABC):

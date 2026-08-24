@@ -164,6 +164,11 @@ Todo el modo servidor se configura por variables de entorno con prefijo
 | `SECUH_IMGSZ` | `640` | Resolución de inferencia. `480` alivia CPU a costa de alcance |
 | `SECUH_CLIP_PRE_SECONDS` / `_POST_` | `10` / `10` | Segundos de clip antes y después del evento |
 | `SECUH_SESSION_TTL_HOURS` | `12` | Duración de la sesión del panel |
+| `SECUH_SCENE_ANNOTATION` | `true` | Registrar y dibujar lo demás que se veía al detectar a la persona |
+| `SECUH_SCENE_MIN_CONFIDENCE` | `0.25` | Confianza mínima para **registrar** un objeto en la BD |
+| `SECUH_SCENE_DRAW_MIN_CONFIDENCE` | `0.45` | Confianza mínima para **dibujar** la caja en la captura |
+| `SECUH_SCENE_DRAW_LABELS` | `[]` | Lista JSON de clases a dibujar; vacío = todas |
+| `SECUH_KEEP_RAW_SNAPSHOT` | `true` | Guardar además la captura sin cajas (`.raw.jpg`) |
 
 **Cómo se aplican, según el modo de ejecución:**
 
@@ -173,6 +178,33 @@ Todo el modo servidor se configura por variables de entorno con prefijo
   que añadirla también ahí (las de la tabla ya están).
 - **Nativo (`run.py`):** editar `backend/.env`, que se lee directo al arrancar.
   Ahí sí vale cualquier variable de `settings.py` sin más trámite.
+
+### 8.1 Anotación de escena y espacio en disco
+
+Con `SECUH_KEEP_RAW_SNAPSHOT=true` cada evento guarda **dos** JPEG: la anotada
+(la que va en la notificación y sirve el panel) y el original sin cajas. La
+retención barre `snapshots/**/*.jpg`, así que las dos expiran juntas sin
+configurar nada. Si el disco aprieta, apagarlo es lo primero que ganaría
+espacio de capturas — aunque lo que de verdad pesa son los clips.
+
+Aviso de privacidad que conviene tener presente: **los registros de objetos
+sobreviven a las imágenes**. A los `SECUH_RETENTION_DAYS` desaparece la foto,
+pero la fila que dice "a las 20:14 había una persona y un auto" se queda en la
+base de datos indefinidamente. Es deliberado —es lo que hace posible el
+análisis— pero hay que declararlo si alguien pregunta qué se guarda y cuánto.
+Para purgarlo hay que borrar los eventos de la BD, no basta con la retención.
+
+### 8.2 Sacar los datos para analizar
+
+`GET /api/events/objects.csv` (autenticado) o, en el propio servidor:
+
+```bash
+cd backend && uv run python scripts/export_dataset.py --out ../data/analisis
+```
+
+Formato, recetas de pandas y limitaciones: [`analisis-de-datos.md`](analisis-de-datos.md).
+
+---
 
 No exponer `SECUH_MODEL` en Docker: la imagen pre-descarga `yolov8n.pt` en el
 build, y pedir otro peso haría que Ultralytics intente bajarlo en runtime como

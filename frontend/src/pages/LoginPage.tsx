@@ -29,9 +29,7 @@ export function LoginPage() {
     <div className="login-page">
       <form className="login-card" onSubmit={handleSubmit}>
         <span className="brand brand-lg">
-          secuh<span className="brand-dot" aria-hidden="true">
-            ·
-          </span>
+          secuh<span className="brand-dot" aria-hidden="true" />
         </span>
         <p className="login-tagline">Panel de vigilancia</p>
 
